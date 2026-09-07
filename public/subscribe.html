@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>OZ 넘버타로 · 유료 전환</title>
+<link rel="stylesheet" href="/css/style.css"/>
+<link rel="manifest" href="/manifest.json"/>
+<meta name="theme-color" content="#bc6338"/>
+<style>
+  .promo { background: linear-gradient(135deg, rgba(188,99,56,.10), rgba(220,234,228,.5)); border-radius: 18px; padding: 26px 22px; text-align: center; }
+  .promo h1 { font-size: 20px; margin-bottom: 8px; }
+  .promo p { font-size: 13px; color: var(--muted-foreground); }
+
+  .plan { border: 0.8px solid var(--primary); border-radius: 14px; padding: 22px 18px; text-align: center; margin-top: 22px; box-shadow: 0 4px 16px rgba(188,99,56,.12); }
+  .plan ul { list-style: none; text-align: left; font-size: 12.5px; color: var(--muted-foreground); margin: 14px auto; max-width: 280px; }
+  .plan ul li { margin-bottom: 7px; padding-left: 16px; position: relative; }
+  .plan ul li::before { content:'✓'; position:absolute; left:0; color: var(--primary); }
+
+  .contact-card { margin-top: 24px; background: var(--secondary); border-radius: 16px; padding: 22px; text-align: center; }
+  .contact-card .t { font-weight: 600; font-size: 14.5px; margin-bottom: 4px; }
+  .contact-card .d { font-size: 12.5px; color: var(--muted-foreground); margin-bottom: 16px; }
+  .contact-row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <a href="/index.html" class="brand">OZ <span>✦</span> 넘버타로</a>
+  <div class="topbar-actions"></div>
+</div>
+
+<div class="container">
+
+  <div class="promo">
+    <h1>✦ 유료 전환 ✦</h1>
+    <p>가족과 친구의 성향 그릇까지 함께 들여다보고,<br/>더 정밀한 22장 카드와 궁합까지 만나보세요.</p>
+  </div>
+
+  <div class="section-label mt-32">무엇이 열리나요</div>
+  <div class="premium-grid">
+    <div class="premium-card">
+      <div class="ic">👨‍👩‍👧</div>
+      <div class="title">가족/친구 프로필</div>
+      <div class="desc">본인 외에 원하는 만큼 등록</div>
+    </div>
+    <div class="premium-card">
+      <div class="ic">🃏</div>
+      <div class="title">0~21번 전체 카드</div>
+      <div class="desc">메이저 아르카나 전체로 정밀 분석</div>
+    </div>
+    <div class="premium-card">
+      <div class="ic">💞</div>
+      <div class="title">궁합 보기</div>
+      <div class="desc">등록한 프로필끼리 궁합 리딩</div>
+    </div>
+    <div class="premium-card">
+      <div class="ic">🌙</div>
+      <div class="title">내적/외적 성향</div>
+      <div class="desc">양력·음력 두 카드로 깊이 있게</div>
+    </div>
+  </div>
+
+  <div id="planSection">
+    <div class="plan">
+      <div class="serif" style="font-size:15px;">OZ 넘버타로 프리미엄</div>
+      <ul>
+        <li>가족/친구 프로필 무제한 등록</li>
+        <li>0~21번 메이저 아르카나 전체 분석</li>
+        <li>프로필 간 궁합 보기</li>
+      </ul>
+      <p class="small muted center mt-16">준비 중이에요. 곧 만나보실 수 있어요.</p>
+    </div>
+  </div>
+
+  <div id="alreadyActive" class="mt-32" style="display:none;">
+    <div class="card center" style="padding:26px 20px;">
+      <div style="font-size:26px;margin-bottom:8px;">🎉</div>
+      <p style="font-weight:600;">이미 유료 이용 중이에요</p>
+      <p class="small muted mt-8">가족/친구 프로필과 궁합을 지금 바로 만나보세요.</p>
+      <a href="/index.html" class="btn btn-primary mt-16">홈으로 가기</a>
+    </div>
+  </div>
+
+  <div class="contact-card">
+    <div class="t">문의</div>
+    <div class="d">궁금하신 점을 편하게 남겨주세요.</div>
+    <div class="contact-row">
+      <a href="mailto:ozmaj@naver.com" class="btn btn-outline btn-sm">✉️ 이메일 문의</a>
+    </div>
+  </div>
+
+</div>
+
+<script type="module">
+import { renderBottomNav, getSession, getMember, isPaidTier } from '/js/app.js';
+renderBottomNav('/subscribe.html');
+
+async function reflectMemberStatus() {
+  const session = await getSession();
+  if (!session) return;
+  const member = await getMember(session);
+  if (!member) return;
+
+  if (isPaidTier(member)) {
+    document.getElementById('planSection').style.display = 'none';
+    document.getElementById('alreadyActive').style.display = 'block';
+  }
+}
+reflectMemberStatus();
+</script>
+</body>
+</html>

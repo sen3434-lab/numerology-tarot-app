@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>OZ 넘버타로 · 결과</title>
+<link rel="stylesheet" href="/css/style.css"/>
+<link rel="manifest" href="/manifest.json"/>
+<meta name="theme-color" content="#bc6338"/>
+<style>
+  .profile-head { text-align: center; padding: 4px 0 10px; }
+  .profile-head .name { font-size: 19px; font-weight: 600; }
+  .profile-head .meta { font-size: 12px; color: var(--muted-foreground); margin-top: 4px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <a href="/index.html" class="brand">OZ <span>✦</span> 넘버타로</a>
+  <div class="topbar-actions"></div>
+</div>
+
+<div class="container">
+  <a href="/index.html" class="small muted">← 프로필 목록</a>
+
+  <div id="loadingView" class="center" style="padding:60px 0;">
+    <div class="spinner"></div>
+  </div>
+
+  <div id="content" style="display:none;">
+    <div class="profile-head">
+      <div class="name" id="profileName"></div>
+      <div class="meta" id="profileMeta"></div>
+    </div>
+
+    <div class="dual-card-grid">
+      <div class="aspect-card">
+        <div class="aspect-label">외적 성향 · 양력</div>
+        <div class="card-num" id="extNum"></div>
+        <div class="card-name" id="extName"></div>
+        <div class="card-body" id="extBody"></div>
+      </div>
+      <div class="aspect-card">
+        <div class="aspect-label">내적 성향 · 음력</div>
+        <div class="card-num" id="intNum"></div>
+        <div class="card-name" id="intName"></div>
+        <div class="card-body" id="intBody"></div>
+      </div>
+    </div>
+
+    <div class="upsell-box" id="upsellBox" style="display:none;">
+      <div class="ic">✨</div>
+      <p><strong>지금은 0~9번 카드까지만 보여드려요.</strong><br/>유료 전환 시 0~21번 전체 메이저 아르카나로 더 정밀하게 분석해드려요.</p>
+      <a href="/subscribe.html" class="btn btn-primary mt-16">유료로 더 자세히 보기</a>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { requireAuth, getMember, getSb, isPaidTier, renderBottomNav, fmtDate } from '/js/app.js';
+import { computeProfileNumbers } from '/js/numerology.js';
+renderBottomNav('/index.html');
+
+const params = new URLSearchParams(location.search);
+const profileId = params.get('id');
+
+async function fetchInterpretation(sb, arcanaNumber, aspect) {
+  const { data } = await sb
+    .from('numerology_interpretations')
+    .select('*, tarot_card:tarot_cards(name, image_url)')
+    .eq('arcana_number', arcanaNumber)
+    .eq('aspect', aspect)
+    .maybeSingle();
+  return data;
+}
+
+async function init() {
+  const session = await requireAuth();
+  if (!session) return;
+  if (!profileId) {
+    window.location.href = '/index.html';
+    return;
+  }
+
+  const member = await getMember(session);
+  if (!member) return;
+  const paid = isPaidTier(member);
+
+  const sb = await getSb();
+  const { data: profile, error } = await sb
+    .from('profiles')
+    .select('*')
+    .eq('id', profileId)
+    .eq('member_id', session.user.id)
+    .maybeSingle();
+
+  if (error || !profile) {
+    console.error(error);
+    document.getElementById('loadingView').innerHTML = '<p class="muted small center">프로필을 찾을 수 없어요.</p>';
+    return;
+  }
+
+  document.getElementById('profileName').textContent = profile.name;
+  document.getElementById('profileMeta').textContent = `${profile.relation} · ${fmtDate(profile.birth_date)} (양력) · ${profile.gender || ''}`;
+
+  const { externalNumber, internalNumber } = computeProfileNumbers(profile.birth_date, paid);
+
+  const extData = await fetchInterpretation(sb, externalNumber, 'external');
+  document.getElementById('extNum').textContent = externalNumber;
+  document.getElementById('extName').textContent = extData?.tarot_card?.name || '(준비 중인 카드예요)';
+  document.getElementById('extBody').textContent = extData?.body_text || '아직 이 카드의 해설이 등록되지 않았어요.';
+
+  if (internalNumber === null) {
+    document.getElementById('intNum').textContent = '-';
+    document.getElementById('intName').textContent = '음력 변환 불가';
+    document.getElementById('intBody').textContent = '이 생년월일은 음력 변환 지원 범위(1391~2050)를 벗어나요.';
+  } else {
+    const intData = await fetchInterpretation(sb, internalNumber, 'internal');
+    document.getElementById('intNum').textContent = internalNumber;
+    document.getElementById('intName').textContent = intData?.tarot_card?.name || '(준비 중인 카드예요)';
+    document.getElementById('intBody').textContent = intData?.body_text || '아직 이 카드의 해설이 등록되지 않았어요.';
+  }
+
+  if (!paid) {
+    document.getElementById('upsellBox').style.display = 'block';
+  }
+
+  document.getElementById('loadingView').style.display = 'none';
+  document.getElementById('content').style.display = 'block';
+}
+init();
+</script>
+</body>
+</html>

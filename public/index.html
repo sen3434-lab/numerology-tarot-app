@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>OZ 넘버타로 · 홈</title>
+<link rel="stylesheet" href="/css/style.css"/>
+<link rel="manifest" href="/manifest.json"/>
+<meta name="theme-color" content="#bc6338"/>
+<style>
+  .hero { text-align: center; padding: 10px 0 26px; }
+  .hero-eyebrow { font-size: 10.5px; letter-spacing: 5px; color: var(--primary); font-weight: 600; text-transform: uppercase; }
+  .hero h1 { font-size: 20px; margin-top: 8px; }
+  .hero p { color: var(--muted-foreground); font-size: 13px; margin-top: 8px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <a href="/index.html" class="brand">OZ <span>✦</span> 넘버타로</a>
+  <div class="topbar-actions">
+    <span class="badge badge-free" id="roleBadge">불러오는 중</span>
+  </div>
+</div>
+
+<div class="container">
+  <div class="hero">
+    <div class="hero-eyebrow">Numerology Tarot</div>
+    <h1>누구의 성향 그릇을 볼까요?</h1>
+    <p>양력은 겉으로 드러나는 외적 성향, 음력은 마음속 내적 성향을 보여줘요.</p>
+  </div>
+
+  <div id="loadingView" class="center" style="padding:40px 0;">
+    <div class="spinner"></div>
+  </div>
+
+  <div id="listView" style="display:none;"></div>
+</div>
+
+<script type="module">
+import { requireAuth, getMember, getSb, isPaidTier, renderBottomNav, showToast } from '/js/app.js';
+renderBottomNav('/index.html');
+
+const roleBadge = document.getElementById('roleBadge');
+const loadingView = document.getElementById('loadingView');
+const listView = document.getElementById('listView');
+
+const RELATION_ICON = { '본인': '🙂', '가족': '👨‍👩‍👧', '친구': '🤝', '기타': '✨' };
+
+async function init() {
+  const session = await requireAuth();
+  if (!session) return;
+
+  const member = await getMember(session);
+  if (!member) return;
+
+  if (member.role === 'student') {
+    roleBadge.textContent = '🎓 정규 수강생 · 무제한';
+    roleBadge.className = 'badge badge-student';
+  } else if (member.subscription_status === 'active') {
+    roleBadge.textContent = '✦ 구독중 · 무제한';
+    roleBadge.className = 'badge badge-active';
+  } else {
+    roleBadge.textContent = '무료 회원';
+    roleBadge.className = 'badge badge-free';
+  }
+
+  const sb = await getSb();
+  const { data: profiles, error } = await sb
+    .from('profiles')
+    .select('*')
+    .eq('member_id', session.user.id)
+    .eq('app_key', 'numerology-tarot')
+    .order('relation', { ascending: true })
+    .order('created_at', { ascending: true });
+
+  loadingView.style.display = 'none';
+
+  if (error) {
+    console.error(error);
+    listView.style.display = 'block';
+    listView.innerHTML = '<p class="muted small center">프로필을 불러오지 못했어요.</p>';
+    return;
+  }
+
+  if (!profiles || profiles.length === 0) {
+    window.location.href = '/profile-form.html?first=1';
+    return;
+  }
+
+  const self = profiles.find(p => p.relation === '본인');
+  const others = profiles.filter(p => p.relation !== '본인');
+  const ordered = self ? [self, ...others] : profiles;
+
+  listView.style.display = 'block';
+  listView.innerHTML = ordered.map(p => `
+    <a class="profile-card" href="/result.html?id=${p.id}">
+      <div class="avatar">${RELATION_ICON[p.relation] || '✨'}</div>
+      <div class="info">
+        <div class="name">${p.name}</div>
+        <div class="rel">${p.relation}</div>
+      </div>
+    </a>
+  `).join('') + `
+    <button class="add-profile-btn mt-8" id="addProfileBtn">
+      ${isPaidTier(member) ? '+ 가족/친구 추가' : '🔒 가족/친구 추가 (유료 전환 필요)'}
+    </button>
+  `;
+
+  document.getElementById('addProfileBtn').addEventListener('click', () => {
+    if (isPaidTier(member)) {
+      window.location.href = '/profile-form.html';
+    } else {
+      showToast('가족/친구 추가는 유료 전환 후 이용하실 수 있어요.');
+      setTimeout(() => window.location.href = '/subscribe.html', 900);
+    }
+  });
+}
+init();
+</script>
+</body>
+</html>

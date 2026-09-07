@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>OZ 넘버타로 · 궁합</title>
+<link rel="stylesheet" href="/css/style.css"/>
+<link rel="manifest" href="/manifest.json"/>
+<meta name="theme-color" content="#bc6338"/>
+<style>
+  .hero { text-align: center; padding: 10px 0 22px; }
+  .hero-eyebrow { font-size: 10.5px; letter-spacing: 5px; color: var(--primary); font-weight: 600; text-transform: uppercase; }
+  .hero h1 { font-size: 20px; margin-top: 8px; }
+  .hero p { color: var(--muted-foreground); font-size: 13px; margin-top: 8px; }
+  .vs-row { display: flex; align-items: center; gap: 10px; }
+  .vs-row .vs { font-size: 13px; color: var(--muted-foreground); flex-shrink: 0; }
+  #resultBox { display: none; text-align: center; margin-top: 24px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <a href="/index.html" class="brand">OZ <span>✦</span> 넘버타로</a>
+  <div class="topbar-actions"></div>
+</div>
+
+<div class="container">
+
+  <div id="loadingView" class="center" style="padding:60px 0;">
+    <div class="spinner"></div>
+  </div>
+
+  <div id="gateView" style="display:none;" class="upsell-box">
+    <div class="ic">💞</div>
+    <p><strong>궁합 보기는 유료 전용 기능이에요.</strong><br/>유료로 전환하시면 등록하신 프로필끼리 궁합을 바로 확인하실 수 있어요.</p>
+    <a href="/subscribe.html" class="btn btn-primary mt-16">유료로 전환하기</a>
+  </div>
+
+  <div id="mainView" style="display:none;">
+    <div class="hero">
+      <div class="hero-eyebrow">Compatibility</div>
+      <h1>두 사람의 궁합을 볼까요?</h1>
+      <p>등록하신 프로필 중 두 명을 골라주세요.</p>
+    </div>
+
+    <form id="compatForm">
+      <div class="vs-row">
+        <select id="profileA" class="field" style="flex:1;padding:12px 14px;border:0.8px solid var(--border);border-radius:8px;"></select>
+        <span class="vs">&amp;</span>
+        <select id="profileB" class="field" style="flex:1;padding:12px 14px;border:0.8px solid var(--border);border-radius:8px;"></select>
+      </div>
+      <button type="submit" class="btn btn-primary btn-block mt-16">궁합 보기</button>
+    </form>
+
+    <div id="resultBox">
+      <div class="dual-card-grid">
+        <div class="aspect-card">
+          <div class="aspect-label" id="nameA"></div>
+          <div class="card-num" id="numA"></div>
+          <div class="card-name" id="cardNameA"></div>
+        </div>
+        <div class="aspect-card">
+          <div class="aspect-label" id="nameB"></div>
+          <div class="card-num" id="numB"></div>
+          <div class="card-name" id="cardNameB"></div>
+        </div>
+      </div>
+      <div class="card mt-16" style="text-align:left;">
+        <div class="section-label">궁합 리딩</div>
+        <p id="summaryText" style="font-size:14px;line-height:1.8;"></p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { requireAuth, getMember, getSb, isPaidTier, renderBottomNav, showToast } from '/js/app.js';
+import { getExternalNumber, PAID_MAX } from '/js/numerology.js';
+renderBottomNav('/compatibility.html');
+
+let profiles = [];
+
+async function init() {
+  const session = await requireAuth();
+  if (!session) return;
+
+  const member = await getMember(session);
+  if (!member) return;
+
+  document.getElementById('loadingView').style.display = 'none';
+
+  if (!isPaidTier(member)) {
+    document.getElementById('gateView').style.display = 'block';
+    return;
+  }
+
+  const sb = await getSb();
+  const { data, error } = await sb
+    .from('profiles')
+    .select('*')
+    .eq('member_id', session.user.id)
+    .eq('app_key', 'numerology-tarot');
+
+  if (error || !data || data.length < 2) {
+    document.getElementById('gateView').innerHTML = `
+      <div class="ic">💞</div>
+      <p><strong>궁합을 보려면 프로필이 2명 이상 필요해요.</strong></p>
+      <a href="/profile-form.html" class="btn btn-primary mt-16">프로필 추가하기</a>
+    `;
+    document.getElementById('gateView').style.display = 'block';
+    return;
+  }
+
+  profiles = data;
+  const optionsHtml = profiles.map(p => `<option value="${p.id}">${p.name} (${p.relation})</option>`).join('');
+  document.getElementById('profileA').innerHTML = optionsHtml;
+  document.getElementById('profileB').innerHTML = optionsHtml;
+  document.getElementById('profileB').selectedIndex = 1;
+
+  document.getElementById('mainView').style.display = 'block';
+}
+init();
+
+document.getElementById('compatForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const idA = document.getElementById('profileA').value;
+  const idB = document.getElementById('profileB').value;
+  if (idA === idB) {
+    showToast('서로 다른 두 프로필을 선택해주세요.');
+    return;
+  }
+
+  const profileA = profiles.find(p => String(p.id) === idA);
+  const profileB = profiles.find(p => String(p.id) === idB);
+
+  const numA = getExternalNumber(profileA.birth_date, PAID_MAX);
+  const numB = getExternalNumber(profileB.birth_date, PAID_MAX);
+  const cardAB = [numA, numB].sort((a, b) => a - b);
+
+  const sb = await getSb();
+  const [{ data: interpA }, { data: interpB }, { data: match }] = await Promise.all([
+    sb.from('numerology_interpretations').select('*, tarot_card:tarot_cards(name)').eq('arcana_number', numA).eq('aspect', 'external').maybeSingle(),
+    sb.from('numerology_interpretations').select('*, tarot_card:tarot_cards(name)').eq('arcana_number', numB).eq('aspect', 'external').maybeSingle(),
+    sb.from('compatibility_matrix').select('*').eq('card_a_number', cardAB[0]).eq('card_b_number', cardAB[1]).maybeSingle(),
+  ]);
+
+  document.getElementById('nameA').textContent = profileA.name;
+  document.getElementById('numA').textContent = numA;
+  document.getElementById('cardNameA').textContent = interpA?.tarot_card?.name || '(준비 중)';
+
+  document.getElementById('nameB').textContent = profileB.name;
+  document.getElementById('numB').textContent = numB;
+  document.getElementById('cardNameB').textContent = interpB?.tarot_card?.name || '(준비 중)';
+
+  document.getElementById('summaryText').textContent = match?.summary_text || '아직 이 조합의 궁합 해설이 등록되지 않았어요.';
+
+  document.getElementById('resultBox').style.display = 'block';
+});
+</script>
+</body>
+</html>

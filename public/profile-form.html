@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>OZ 넘버타로 · 프로필 추가</title>
+<link rel="stylesheet" href="/css/style.css"/>
+<link rel="manifest" href="/manifest.json"/>
+<meta name="theme-color" content="#bc6338"/>
+</head>
+<body>
+
+<div class="topbar">
+  <a href="/index.html" class="brand">OZ <span>✦</span> 넘버타로</a>
+  <div class="topbar-actions"></div>
+</div>
+
+<div class="container">
+  <h1 id="formTitle" style="font-size:20px;margin-bottom:6px;">프로필 추가</h1>
+  <p class="muted small mb-24" id="formSub">생년월일을 정확히 입력해주세요.</p>
+
+  <form id="profileForm">
+    <div class="field" id="relationField">
+      <label>관계</label>
+      <select id="relation">
+        <option value="가족">가족</option>
+        <option value="친구">친구</option>
+        <option value="기타">기타</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label>이름</label>
+      <input type="text" id="name" required placeholder="이름을 입력해주세요"/>
+    </div>
+
+    <div class="field">
+      <label>생년월일 (양력)</label>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+        <input type="number" id="year" required placeholder="1990" min="1391" max="2050"/>
+        <input type="number" id="month" required placeholder="월" min="1" max="12"/>
+        <input type="number" id="day" required placeholder="일" min="1" max="31"/>
+      </div>
+      <p class="small muted mt-8">음력 성향은 입력하신 양력 날짜를 기준으로 자동 변환해서 함께 보여드려요.</p>
+    </div>
+
+    <div class="field">
+      <label>성별</label>
+      <div class="radio-row">
+        <label><input type="radio" name="gender" value="남성" checked/> 남성</label>
+        <label><input type="radio" name="gender" value="여성"/> 여성</label>
+      </div>
+    </div>
+
+    <p class="err small" id="errMsg" style="display:none;color:var(--danger);"></p>
+
+    <button type="submit" class="btn btn-primary btn-block mt-16" id="submitBtn">저장</button>
+  </form>
+</div>
+
+<script type="module">
+import { requireAuth, getSb, showToast } from '/js/app.js';
+
+const params = new URLSearchParams(location.search);
+const isFirst = params.get('first') === '1';
+
+if (isFirst) {
+  document.getElementById('formTitle').textContent = '본인 정보 입력';
+  document.getElementById('formSub').textContent = '먼저 본인의 생년월일을 입력해주세요. 본인 프로필은 무료로 이용하실 수 있어요.';
+  document.getElementById('relationField').style.display = 'none';
+}
+
+let session = null;
+(async () => {
+  session = await requireAuth();
+})();
+
+document.getElementById('profileForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!session) return;
+
+  const errMsg = document.getElementById('errMsg');
+  errMsg.style.display = 'none';
+  const submitBtn = document.getElementById('submitBtn');
+  submitBtn.disabled = true;
+  submitBtn.textContent = '저장 중...';
+
+  const name = document.getElementById('name').value.trim();
+  const year = Number(document.getElementById('year').value);
+  const month = Number(document.getElementById('month').value);
+  const day = Number(document.getElementById('day').value);
+  const gender = document.querySelector('input[name="gender"]:checked').value;
+  const relation = isFirst ? '본인' : document.getElementById('relation').value;
+
+  if (!name || !year || !month || !day) {
+    errMsg.textContent = '이름과 생년월일을 모두 입력해주세요.';
+    errMsg.style.display = 'block';
+    submitBtn.disabled = false;
+    submitBtn.textContent = '저장';
+    return;
+  }
+
+  const birthDate = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
+  const sb = await getSb();
+  const { data, error } = await sb
+    .from('profiles')
+    .insert({
+      member_id: session.user.id,
+      app_key: 'numerology-tarot',
+      relation,
+      name,
+      birth_date: birthDate,
+      gender,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error(error);
+    if (String(error.message || '').includes('upgrade_required')) {
+      errMsg.textContent = '가족/친구 추가는 유료 전환 후 이용하실 수 있어요.';
+      errMsg.style.display = 'block';
+      setTimeout(() => window.location.href = '/subscribe.html', 1200);
+    } else {
+      errMsg.textContent = '저장에 실패했어요. 다시 시도해주세요.';
+      errMsg.style.display = 'block';
+    }
+    submitBtn.disabled = false;
+    submitBtn.textContent = '저장';
+    return;
+  }
+
+  showToast('프로필을 저장했어요 ✓');
+  window.location.href = `/result.html?id=${data.id}`;
+});
+</script>
+</body>
+</html>
