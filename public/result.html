@@ -14,7 +14,9 @@
 
   .aspect-block { border: 0.8px solid var(--border); border-radius: 18px; padding: 20px; background: var(--card); margin-top: 18px; }
   .aspect-block-head { display: flex; align-items: center; gap: 12px; }
-  .aspect-block-head .card-num { width: 40px; height: 40px; border-radius: 50%; background: var(--secondary); display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 600; flex-shrink: 0; }
+  .card-num-wrap { flex-shrink: 0; text-align: center; }
+  .card-num-wrap .card-num { width: 40px; height: 40px; border-radius: 50%; background: var(--secondary); display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 600; }
+  .card-num-wrap .card-num-label { font-size: 9.5px; color: var(--muted-foreground); margin-top: 3px; }
   .aspect-block-head .head-text { min-width: 0; }
   .aspect-block .aspect-label { font-size: 10.5px; letter-spacing: 2px; text-transform: uppercase; color: var(--primary-dark); font-weight: 600; }
   .aspect-block .card-title { font-size: 16px; font-weight: 600; margin-top: 2px; }
@@ -102,7 +104,10 @@ function renderAspectBlock(container, { label, num, cardName, data }) {
   container.innerHTML = `
     <div class="aspect-block">
       <div class="aspect-block-head">
-        <div class="card-num">${num}</div>
+        <div class="card-num-wrap">
+          <div class="card-num">${num}</div>
+          <div class="card-num-label">소울넘버</div>
+        </div>
         <div class="head-text">
           <div class="aspect-label">${label}</div>
           <div class="card-title">${data?.title || cardName || '(준비 중인 카드예요)'}</div>
@@ -141,29 +146,27 @@ async function init() {
   }
 
   document.getElementById('profileName').textContent = profile.name;
-  document.getElementById('profileMeta').textContent = `${profile.relation} · ${fmtDate(profile.birth_date)} (양력) · ${profile.gender || ''}`;
+  document.getElementById('profileMeta').textContent = `${profile.relation} · ${fmtDate(profile.birth_date)} (${profile.is_lunar ? '음력' : '양력'}${profile.is_intercalation ? ' 윤달' : ''}) · ${profile.gender || ''}`;
 
-  const { externalNumber, internalNumber } = computeProfileNumbers(profile.birth_date, paid);
+  const { externalNumber, internalNumber } = computeProfileNumbers(profile, paid);
+  const conversionFailed = externalNumber === null || internalNumber === null;
 
-  const extData = await fetchInterpretation(sb, externalNumber, 'external');
-  renderAspectBlock(document.getElementById('extBlock'), {
-    label: '외적 성향 · 양력',
-    num: externalNumber,
-    cardName: extData?.tarot_card?.name,
-    data: extData,
-  });
-
-  if (internalNumber === null) {
-    renderAspectBlock(document.getElementById('intBlock'), {
-      label: '내적 성향 · 음력',
-      num: '-',
-      cardName: '음력 변환 불가',
-      data: {
-        personality_text: '이 생년월일은 음력 변환 지원 범위(1391~2050)를 벗어나요.',
-        wealth_text: '', love_text: '', health_text: '',
-      },
-    });
+  if (conversionFailed) {
+    const failMsg = {
+      personality_text: '이 생년월일은 음력↔양력 변환 지원 범위(1000~2050년)를 벗어나요.',
+      wealth_text: '', love_text: '', health_text: '',
+    };
+    renderAspectBlock(document.getElementById('extBlock'), { label: '외적 성향 · 양력', num: '-', cardName: '변환 불가', data: failMsg });
+    renderAspectBlock(document.getElementById('intBlock'), { label: '내적 성향 · 음력', num: '-', cardName: '변환 불가', data: failMsg });
   } else {
+    const extData = await fetchInterpretation(sb, externalNumber, 'external');
+    renderAspectBlock(document.getElementById('extBlock'), {
+      label: '외적 성향 · 양력',
+      num: externalNumber,
+      cardName: extData?.tarot_card?.name,
+      data: extData,
+    });
+
     const intData = await fetchInterpretation(sb, internalNumber, 'internal');
     renderAspectBlock(document.getElementById('intBlock'), {
       label: '내적 성향 · 음력',

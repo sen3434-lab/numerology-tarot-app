@@ -75,7 +75,7 @@
 
 <script type="module">
 import { requireAuth, getMember, getSb, isPaidTier, renderBottomNav, showToast } from '/js/app.js';
-import { getExternalNumber, PAID_MAX } from '/js/numerology.js';
+import { computeExternalNumber } from '/js/numerology.js';
 renderBottomNav('/compatibility.html');
 
 let profiles = [];
@@ -133,8 +133,12 @@ document.getElementById('compatForm').addEventListener('submit', async (e) => {
   const profileA = profiles.find(p => String(p.id) === idA);
   const profileB = profiles.find(p => String(p.id) === idB);
 
-  const numA = getExternalNumber(profileA.birth_date, PAID_MAX);
-  const numB = getExternalNumber(profileB.birth_date, PAID_MAX);
+  const numA = computeExternalNumber(profileA, true);
+  const numB = computeExternalNumber(profileB, true);
+  if (numA === null || numB === null) {
+    showToast('생년월일 변환 지원 범위를 벗어난 프로필이 있어요.');
+    return;
+  }
   const cardAB = [numA, numB].sort((a, b) => a - b);
 
   const sb = await getSb();

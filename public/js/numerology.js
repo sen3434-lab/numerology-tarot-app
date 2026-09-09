@@ -1,6 +1,10 @@
 // Numerology calculation: birth date -> a single card number, for both the
 // solar (외적/external) and lunar (내적/internal) reading of a profile.
 //
+// A profile's birth_date is entered in ONE calendar (is_lunar says which);
+// the other calendar's date is derived via korean-lunar-calendar, not asked
+// for separately.
+//
 // Free tier: digits are reduced all the way down, capped at 9, matching
 // Major Arcana cards 0-9. Paid tier: reduction stops as soon as the value
 // is 21 or below, matching the full Major Arcana range 0-21. (0 itself
@@ -26,34 +30,41 @@ function reduceToMax(n, max) {
   return value;
 }
 
-// birthDate: 'YYYY-MM-DD' (solar). Returns an integer 1..max.
-export function getExternalNumber(birthDate, maxAllowed) {
-  const sum = digitSum(birthDate);
-  return reduceToMax(sum, maxAllowed);
+function fmtYmd({ year, month, day }) {
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
-// birthDate: 'YYYY-MM-DD' (solar). Converts to the Korean lunar calendar
-// date and reduces that instead. Returns null if the date falls outside
-// the conversion library's supported range (1391-01-01 ~ 2050-12-31).
-export function getInternalNumber(birthDate, maxAllowed) {
+// birthDate: 'YYYY-MM-DD' as entered, in whichever calendar isLunar says.
+// Returns { solar: {year,month,day}, lunar: {year,month,day,intercalation} }
+// or null if the date is invalid / outside the library's supported range
+// (1000-01-01 ~ 2050-12-31 lunar, roughly 1000-1000~2050 solar).
+function convertDate(birthDate, isLunar, isIntercalation) {
   const [y, m, d] = birthDate.split('-').map(Number);
   const calendar = new KoreanLunarCalendar();
-  const ok = calendar.setSolarDate(y, m, d);
-  if (ok === false) return null;
-
-  const lunar = calendar.getLunarCalendar();
-  if (!lunar) return null;
-
-  const lunarStr = `${lunar.year}-${String(lunar.month).padStart(2, '0')}-${String(lunar.day).padStart(2, '0')}`;
-  const sum = digitSum(lunarStr);
-  return reduceToMax(sum, maxAllowed);
+  const ok = isLunar
+    ? calendar.setLunarDate(y, m, d, !!isIntercalation)
+    : calendar.setSolarDate(y, m, d);
+  if (!ok) return null;
+  return { solar: calendar.getSolarCalendar(), lunar: calendar.getLunarCalendar() };
 }
 
-// Convenience: both numbers at once, respecting the caller's tier.
-export function computeProfileNumbers(birthDate, isPaid) {
+// Both numbers at once, respecting the caller's tier. profile is
+// { birth_date, is_lunar, is_intercalation }. Returns
+// { externalNumber, internalNumber } — both null if the date can't be
+// converted (outside supported range).
+export function computeProfileNumbers(profile, isPaid) {
   const max = isPaid ? PAID_MAX : FREE_MAX;
+  const converted = convertDate(profile.birth_date, profile.is_lunar, profile.is_intercalation);
+  if (!converted) return { externalNumber: null, internalNumber: null };
+
   return {
-    externalNumber: getExternalNumber(birthDate, max),
-    internalNumber: getInternalNumber(birthDate, max),
+    externalNumber: reduceToMax(digitSum(fmtYmd(converted.solar)), max),
+    internalNumber: reduceToMax(digitSum(fmtYmd(converted.lunar)), max),
   };
+}
+
+// External (양력) number only — used by compatibility.html, which only
+// compares people on their external card.
+export function computeExternalNumber(profile, isPaid) {
+  return computeProfileNumbers(profile, isPaid).externalNumber;
 }

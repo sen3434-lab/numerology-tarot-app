@@ -35,13 +35,24 @@
     </div>
 
     <div class="field">
-      <label>생년월일 (양력)</label>
+      <label>양력 / 음력</label>
+      <div class="radio-row">
+        <label><input type="radio" name="isLunar" value="false" checked/> 양력</label>
+        <label><input type="radio" name="isLunar" value="true"/> 음력</label>
+      </div>
+      <label class="mt-8" id="intercalationField" style="display:none;align-items:center;gap:6px;font-size:12.5px;font-weight:normal;color:var(--foreground);cursor:pointer;">
+        <input type="checkbox" id="isIntercalation" style="width:auto;"/> 윤달이에요
+      </label>
+    </div>
+
+    <div class="field">
+      <label>생년월일</label>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
-        <input type="number" id="year" required placeholder="1990" min="1391" max="2050"/>
+        <input type="number" id="year" required placeholder="1990" min="1000" max="2050"/>
         <input type="number" id="month" required placeholder="월" min="1" max="12"/>
         <input type="number" id="day" required placeholder="일" min="1" max="31"/>
       </div>
-      <p class="small muted mt-8">음력 성향은 입력하신 양력 날짜를 기준으로 자동 변환해서 함께 보여드려요.</p>
+      <p class="small muted mt-8" id="calendarHint">입력하신 양력 날짜를 기준으로 음력 성향도 함께 자동 변환해서 보여드려요.</p>
     </div>
 
     <div class="field">
@@ -75,6 +86,18 @@ let session = null;
   session = await requireAuth();
 })();
 
+const intercalationField = document.getElementById('intercalationField');
+const calendarHint = document.getElementById('calendarHint');
+document.querySelectorAll('input[name="isLunar"]').forEach((radio) => {
+  radio.addEventListener('change', () => {
+    const isLunar = document.querySelector('input[name="isLunar"]:checked').value === 'true';
+    intercalationField.style.display = isLunar ? 'block' : 'none';
+    calendarHint.textContent = isLunar
+      ? '입력하신 음력 날짜를 기준으로 양력 성향도 함께 자동 변환해서 보여드려요.'
+      : '입력하신 양력 날짜를 기준으로 음력 성향도 함께 자동 변환해서 보여드려요.';
+  });
+});
+
 document.getElementById('profileForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   if (!session) return;
@@ -91,6 +114,8 @@ document.getElementById('profileForm').addEventListener('submit', async (e) => {
   const day = Number(document.getElementById('day').value);
   const gender = document.querySelector('input[name="gender"]:checked').value;
   const relation = isFirst ? '본인' : document.getElementById('relation').value;
+  const isLunar = document.querySelector('input[name="isLunar"]:checked').value === 'true';
+  const isIntercalation = isLunar && document.getElementById('isIntercalation').checked;
 
   if (!name || !year || !month || !day) {
     errMsg.textContent = '이름과 생년월일을 모두 입력해주세요.';
@@ -111,6 +136,8 @@ document.getElementById('profileForm').addEventListener('submit', async (e) => {
       relation,
       name,
       birth_date: birthDate,
+      is_lunar: isLunar,
+      is_intercalation: isIntercalation,
       gender,
     })
     .select()

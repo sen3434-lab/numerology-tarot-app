@@ -21,10 +21,20 @@ create table if not exists public.profiles (
   relation text not null default '본인' check (relation in ('본인','가족','친구','기타')),
   name text not null,
   birth_date date not null,
+  -- Which calendar birth_date itself was entered in. The *other* calendar's
+  -- date (and therefore number/card) is derived from this one via
+  -- korean-lunar-calendar, not asked for separately.
+  is_lunar boolean not null default false,
+  is_intercalation boolean not null default false,
   gender text check (gender in ('남성','여성')),
   is_default boolean not null default false,
   created_at timestamptz not null default now()
 );
+
+-- Safe to re-run on a profiles table created before this column existed.
+alter table public.profiles
+  add column if not exists is_lunar boolean not null default false,
+  add column if not exists is_intercalation boolean not null default false;
 
 -- Only one '본인' profile per member per app.
 create unique index if not exists profiles_one_self_per_member
