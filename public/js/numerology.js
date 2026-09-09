@@ -9,7 +9,7 @@
 export const FREE_MAX = 9;
 export const PAID_MAX = 21;
 
-import KoreanLunarCalendar from 'https://esm.sh/korean-lunar-calendar@1.0.4';
+import KoreanLunarCalendar from 'https://esm.sh/korean-lunar-calendar@0.4.0';
 
 function digitSum(numStr) {
   return numStr
