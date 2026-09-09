@@ -89,13 +89,18 @@ alter table public.tarot_cards
 --    are shown only rows where arcana_number <= 9; paid members see the
 --    full 0-21 range. Gating happens in the app, not via RLS, matching
 --    how tarot_cards is already public-readable in the sibling apps.
+--    Read like a saju reading: one personality section plus three luck
+--    categories (재물운/애정운/건강운), not just a single blurb.
 create table if not exists public.numerology_interpretations (
   id bigserial primary key,
   arcana_number int not null check (arcana_number between 0 and 21),
   aspect text not null check (aspect in ('external','internal')),
   tarot_card_id bigint references public.tarot_cards(id),
   title text,
-  body_text text,
+  personality_text text,
+  wealth_text text,
+  love_text text,
+  health_text text,
   created_at timestamptz not null default now(),
   unique (arcana_number, aspect)
 );

@@ -11,6 +11,23 @@
   .profile-head { text-align: center; padding: 4px 0 10px; }
   .profile-head .name { font-size: 19px; font-weight: 600; }
   .profile-head .meta { font-size: 12px; color: var(--muted-foreground); margin-top: 4px; }
+
+  .aspect-block { border: 0.8px solid var(--border); border-radius: 18px; padding: 20px; background: var(--card); margin-top: 18px; }
+  .aspect-block-head { display: flex; align-items: center; gap: 12px; }
+  .aspect-block-head .card-num { width: 40px; height: 40px; border-radius: 50%; background: var(--secondary); display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 600; flex-shrink: 0; }
+  .aspect-block-head .head-text { min-width: 0; }
+  .aspect-block .aspect-label { font-size: 10.5px; letter-spacing: 2px; text-transform: uppercase; color: var(--primary-dark); font-weight: 600; }
+  .aspect-block .card-title { font-size: 16px; font-weight: 600; margin-top: 2px; }
+  .aspect-block .card-name { font-size: 11.5px; color: var(--muted-foreground); margin-top: 2px; }
+
+  .trait-list { margin-top: 16px; display: flex; flex-direction: column; gap: 12px; }
+  .trait-item { display: flex; gap: 12px; }
+  .trait-item .trait-tag {
+    flex-shrink: 0; width: 56px; text-align: center; align-self: flex-start;
+    font-size: 11.5px; font-weight: 600; color: var(--accent-foreground);
+    background: var(--accent); border-radius: var(--radius-pill); padding: 4px 0;
+  }
+  .trait-item p { font-size: 13px; line-height: 1.7; }
 </style>
 </head>
 <body>
@@ -33,20 +50,8 @@
       <div class="meta" id="profileMeta"></div>
     </div>
 
-    <div class="dual-card-grid">
-      <div class="aspect-card">
-        <div class="aspect-label">외적 성향 · 양력</div>
-        <div class="card-num" id="extNum"></div>
-        <div class="card-name" id="extName"></div>
-        <div class="card-body" id="extBody"></div>
-      </div>
-      <div class="aspect-card">
-        <div class="aspect-label">내적 성향 · 음력</div>
-        <div class="card-num" id="intNum"></div>
-        <div class="card-name" id="intName"></div>
-        <div class="card-body" id="intBody"></div>
-      </div>
-    </div>
+    <div id="extBlock"></div>
+    <div id="intBlock"></div>
 
     <div class="upsell-box" id="upsellBox" style="display:none;">
       <div class="ic">✨</div>
@@ -64,6 +69,10 @@ renderBottomNav('/index.html');
 const params = new URLSearchParams(location.search);
 const profileId = params.get('id');
 
+// The four trait fields are pre-generated (once, offline, via
+// data/generate_content.js) and stored in the DB — so the same card+aspect
+// always reads identically, instead of a fresh (and inconsistent) AI call
+// on every page view.
 async function fetchInterpretation(sb, arcanaNumber, aspect) {
   const { data } = await sb
     .from('numerology_interpretations')
@@ -72,6 +81,37 @@ async function fetchInterpretation(sb, arcanaNumber, aspect) {
     .eq('aspect', aspect)
     .maybeSingle();
   return data;
+}
+
+const TRAIT_ROWS = [
+  ['personality_text', '성향'],
+  ['wealth_text', '재물운'],
+  ['love_text', '애정운'],
+  ['health_text', '건강운'],
+];
+const PLACEHOLDER = '아직 이 카드의 해설이 등록되지 않았어요.';
+
+function renderAspectBlock(container, { label, num, cardName, data }) {
+  const traitsHtml = TRAIT_ROWS.map(([field, tag]) => `
+    <div class="trait-item">
+      <span class="trait-tag">${tag}</span>
+      <p>${data?.[field] || PLACEHOLDER}</p>
+    </div>
+  `).join('');
+
+  container.innerHTML = `
+    <div class="aspect-block">
+      <div class="aspect-block-head">
+        <div class="card-num">${num}</div>
+        <div class="head-text">
+          <div class="aspect-label">${label}</div>
+          <div class="card-title">${data?.title || cardName || '(준비 중인 카드예요)'}</div>
+          <div class="card-name">${cardName || ''}</div>
+        </div>
+      </div>
+      <div class="trait-list">${traitsHtml}</div>
+    </div>
+  `;
 }
 
 async function init() {
@@ -106,19 +146,31 @@ async function init() {
   const { externalNumber, internalNumber } = computeProfileNumbers(profile.birth_date, paid);
 
   const extData = await fetchInterpretation(sb, externalNumber, 'external');
-  document.getElementById('extNum').textContent = externalNumber;
-  document.getElementById('extName').textContent = extData?.tarot_card?.name || '(준비 중인 카드예요)';
-  document.getElementById('extBody').textContent = extData?.body_text || '아직 이 카드의 해설이 등록되지 않았어요.';
+  renderAspectBlock(document.getElementById('extBlock'), {
+    label: '외적 성향 · 양력',
+    num: externalNumber,
+    cardName: extData?.tarot_card?.name,
+    data: extData,
+  });
 
   if (internalNumber === null) {
-    document.getElementById('intNum').textContent = '-';
-    document.getElementById('intName').textContent = '음력 변환 불가';
-    document.getElementById('intBody').textContent = '이 생년월일은 음력 변환 지원 범위(1391~2050)를 벗어나요.';
+    renderAspectBlock(document.getElementById('intBlock'), {
+      label: '내적 성향 · 음력',
+      num: '-',
+      cardName: '음력 변환 불가',
+      data: {
+        personality_text: '이 생년월일은 음력 변환 지원 범위(1391~2050)를 벗어나요.',
+        wealth_text: '', love_text: '', health_text: '',
+      },
+    });
   } else {
     const intData = await fetchInterpretation(sb, internalNumber, 'internal');
-    document.getElementById('intNum').textContent = internalNumber;
-    document.getElementById('intName').textContent = intData?.tarot_card?.name || '(준비 중인 카드예요)';
-    document.getElementById('intBody').textContent = intData?.body_text || '아직 이 카드의 해설이 등록되지 않았어요.';
+    renderAspectBlock(document.getElementById('intBlock'), {
+      label: '내적 성향 · 음력',
+      num: internalNumber,
+      cardName: intData?.tarot_card?.name,
+      data: intData,
+    });
   }
 
   if (!paid) {
