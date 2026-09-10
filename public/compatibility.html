@@ -15,6 +15,10 @@
   .vs-row { display: flex; align-items: center; gap: 10px; }
   .vs-row .vs { font-size: 13px; color: var(--muted-foreground); flex-shrink: 0; }
   #resultBox { display: none; text-align: center; margin-top: 24px; }
+  .score-box { margin-top: 20px; }
+  .score-box .score-num { font-size: 40px; font-weight: 700; color: var(--primary-dark); line-height: 1; }
+  .score-box .score-num small { font-size: 16px; font-weight: 500; }
+  .score-box .badge { margin-top: 8px; }
 </style>
 </head>
 <body>
@@ -65,6 +69,12 @@
           <div class="card-name" id="cardNameB"></div>
         </div>
       </div>
+
+      <div class="score-box">
+        <div class="score-num" id="scoreNum"></div>
+        <span class="badge" id="scoreBadge"></span>
+      </div>
+
       <div class="card mt-16" style="text-align:left;">
         <div class="section-label">궁합 리딩</div>
         <p id="summaryText" style="font-size:14px;line-height:1.8;"></p>
@@ -157,6 +167,20 @@ document.getElementById('compatForm').addEventListener('submit', async (e) => {
   document.getElementById('cardNameB').textContent = interpB?.tarot_card?.name || '(준비 중)';
 
   document.getElementById('summaryText').textContent = match?.summary_text || '아직 이 조합의 궁합 해설이 등록되지 않았어요.';
+
+  const score = match?.score;
+  const scoreNumEl = document.getElementById('scoreNum');
+  const scoreBadgeEl = document.getElementById('scoreBadge');
+  if (score == null) {
+    scoreNumEl.textContent = '';
+    scoreBadgeEl.textContent = '점수 준비 중';
+    scoreBadgeEl.className = 'badge badge-free';
+  } else {
+    scoreNumEl.innerHTML = `${score}<small>점</small>`;
+    const [label, cls] = score >= 90 ? ['좋음', 'badge-active'] : score >= 80 ? ['보통', 'badge-student'] : ['별로', 'badge-free'];
+    scoreBadgeEl.textContent = label;
+    scoreBadgeEl.className = `badge ${cls}`;
+  }
 
   document.getElementById('resultBox').style.display = 'block';
 });

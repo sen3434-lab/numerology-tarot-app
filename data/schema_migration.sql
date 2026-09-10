@@ -128,10 +128,17 @@ create table if not exists public.compatibility_matrix (
   card_a_number int not null check (card_a_number between 0 and 21),
   card_b_number int not null check (card_b_number between 0 and 21),
   summary_text text,
+  -- Always 70-100 on purpose — this is a fun/vibes score, never a "bad
+  -- match" verdict. 70s = 별로, 80s = 보통, 90s = 좋음.
+  score int check (score between 70 and 100),
   created_at timestamptz not null default now(),
   unique (card_a_number, card_b_number),
   check (card_a_number <= card_b_number)
 );
+
+-- Safe to re-run on a compatibility_matrix table created before this column existed.
+alter table public.compatibility_matrix
+  add column if not exists score int check (score between 70 and 100);
 
 alter table public.compatibility_matrix enable row level security;
 drop policy if exists "public can read compatibility_matrix" on public.compatibility_matrix;
