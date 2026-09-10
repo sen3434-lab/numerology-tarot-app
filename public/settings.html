@@ -52,6 +52,10 @@
 
     <div class="section-label">일반</div>
     <div class="card mb-24">
+      <div class="row" id="rowVerify">
+        <span class="rl">정규 수강생 인증</span>
+        <a href="/verify-student.html" class="btn btn-outline btn-sm">인증하기</a>
+      </div>
       <div class="row" id="rowSubscribe">
         <span class="rl">유료 전환</span>
         <a href="/subscribe.html" class="btn btn-outline btn-sm">보기</a>
@@ -92,6 +96,7 @@ async function init() {
   document.getElementById('rowRole').textContent = roleLabel;
   document.getElementById('rowJoined').textContent = member.created_at ? fmtDate(member.created_at) : '-';
 
+  document.getElementById('rowVerify').style.display = member.role === 'student' ? 'none' : 'flex';
   document.getElementById('rowSubscribe').style.display = isPaidTier(member) ? 'none' : 'flex';
 }
 init();
