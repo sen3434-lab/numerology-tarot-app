@@ -130,6 +130,29 @@ function compatibilityPrompt(nameA, nameB) {
 }`;
 }
 
+// '속궁합' — only ever shown for a 본인-연인 pair in the app, never for
+// family/friends. Keep it firmly PG-13: chemistry, attraction, skinship
+// style — never explicit anatomy or sex acts, so it reads like a normal
+// mainstream 운세 앱 궁합 section, not erotica.
+function intimacyCompatibilityPrompt(nameA, nameB) {
+  return `당신은 'OZ 넘버타로'의 입담 좋은 리더입니다. 연인 사이인 두 사람의 '속궁합'(스킨십 궁합·애정 표현 궁합)을 두 타로 카드를 바탕으로 재밌고 맛깔나게 풀어주는 한국어 리딩을 씁니다.
+
+- 사람 A의 카드: "${nameA}"
+- 사람 B의 카드: "${nameB}"
+- 이 글은 특정 개인이 아니라 "이 두 카드 조합 전반"을 향한 것입니다. 이름을 넣지 말고, "이 둘"처럼 범용적으로 쓰세요.
+- 다룰 소재: 손잡기·포옹·기습 뽀뽀 같은 가벼운 스킨십 타이밍과 스타일, 애정 표현 방식, 설렘 포인트, 밀당의 온도차. 이 이상으로 나아가는 성적인 내용, 신체 부위, 침실/잠자리 관련 묘사는 절대 쓰지 마세요.
+- "뜨겁다", "아찔하다", "달아오르다" 같은 성적 뉘앙스가 강한 표현은 쓰지 마세요. 전체이용가 웹툰 로맨스물 수준의 풋풋하고 귀여운 톤을 유지하세요.
+- 두 카드의 상징이 만났을 때 생기는 케미를 걸쭉한 입담으로 캐릭터화하세요. 과장된 비유와 드립을 적극적으로 섞되, 저속하거나 19금스러운 표현은 피하세요.
+- 3~4문장, 전체 100~180자 내외.
+- score는 70~100 사이 정수입니다. 70점대=무난, 80점대=잘 맞는 편, 90점대=찰떡.
+- 반드시 아래 JSON 형식으로만 답하세요.
+
+{
+  "score": 70~100 사이 정수,
+  "summary_text": "재밌고 맛깔나는 속궁합 리딩 텍스트"
+}`;
+}
+
 async function generateInterpretations() {
   const { data: cards, error } = await sb
     .from('tarot_cards')
@@ -170,7 +193,7 @@ async function generateInterpretations() {
   }
 }
 
-async function generateCompatibility() {
+async function generateCompatibilityBatch(kind, buildPrompt, label) {
   const pairs = [];
   for (const [a, nameA] of MAJOR_ARCANA) {
     for (const [b, nameB] of MAJOR_ARCANA) {
@@ -181,16 +204,17 @@ async function generateCompatibility() {
   let i = 0;
   for (const [a, nameA, b, nameB] of pairs) {
     i += 1;
-    process.stdout.write(`[${i}/${pairs.length}] compatibility #${a}-#${b}... `);
+    process.stdout.write(`[${i}/${pairs.length}] ${label} #${a}-#${b}... `);
     try {
-      const result = await callGeminiWithRetry(compatibilityPrompt(nameA, nameB), '궁합 리딩을 작성해줘.');
+      const result = await callGeminiWithRetry(buildPrompt(nameA, nameB), '궁합 리딩을 작성해줘.');
       const score = Math.min(100, Math.max(70, Math.round(result.score)));
       const { error: upsertError } = await sb.from('compatibility_matrix').upsert({
         card_a_number: a,
         card_b_number: b,
+        kind,
         summary_text: result.summary_text,
         score,
-      }, { onConflict: 'card_a_number,card_b_number' });
+      }, { onConflict: 'card_a_number,card_b_number,kind' });
       if (upsertError) throw upsertError;
       console.log('ok');
     } catch (err) {
@@ -200,15 +224,26 @@ async function generateCompatibility() {
   }
 }
 
+async function generateCompatibility() {
+  await generateCompatibilityBatch('general', compatibilityPrompt, 'compatibility');
+}
+
+async function generateIntimacyCompatibility() {
+  await generateCompatibilityBatch('intimacy', intimacyCompatibilityPrompt, 'intimacy');
+}
+
 async function main() {
   const target = process.argv[2];
   if (target === 'interpretations') {
     await generateInterpretations();
   } else if (target === 'compatibility') {
     await generateCompatibility();
+  } else if (target === 'intimacy') {
+    await generateIntimacyCompatibility();
   } else {
     await generateInterpretations();
     await generateCompatibility();
+    await generateIntimacyCompatibility();
   }
   console.log('Done.');
 }

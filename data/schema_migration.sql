@@ -18,7 +18,7 @@ create table if not exists public.profiles (
   id bigserial primary key,
   member_id uuid not null references public.members(id) on delete cascade,
   app_key text not null default 'numerology-tarot' references public.apps(key),
-  relation text not null default '본인' check (relation in ('본인','가족','친구','기타')),
+  relation text not null default '본인' check (relation in ('본인','가족','친구','연인','배우자','기타')),
   name text not null,
   birth_date date not null,
   -- Which calendar birth_date itself was entered in. The *other* calendar's
@@ -35,6 +35,12 @@ create table if not exists public.profiles (
 alter table public.profiles
   add column if not exists is_lunar boolean not null default false,
   add column if not exists is_intercalation boolean not null default false;
+
+-- Widen the relation check to include '연인' on a profiles table created
+-- before this option existed (default constraint name).
+alter table public.profiles drop constraint if exists profiles_relation_check;
+alter table public.profiles add constraint profiles_relation_check
+  check (relation in ('본인','가족','친구','연인','배우자','기타'));
 
 -- Only one '본인' profile per member per app.
 create unique index if not exists profiles_one_self_per_member
@@ -123,22 +129,34 @@ create policy "public can read numerology_interpretations" on public.numerology_
 -- 5) Compatibility copy between two external-number cards. Paid-only
 --    feature — the compatibility.html page itself checks subscription
 --    status before ever querying this table.
+-- 'kind' separates the general (외적/양력 number pair) reading from the
+-- '속궁합' intimacy reading (내적/음력 number pair) — same 0-21 card space,
+-- but the two numbers being paired come from different calendars, so they
+-- need independent rows, not just different text on one row.
 create table if not exists public.compatibility_matrix (
   id bigserial primary key,
   card_a_number int not null check (card_a_number between 0 and 21),
   card_b_number int not null check (card_b_number between 0 and 21),
+  kind text not null default 'general' check (kind in ('general','intimacy')),
   summary_text text,
   -- Always 70-100 on purpose — this is a fun/vibes score, never a "bad
   -- match" verdict. 70s = 별로, 80s = 보통, 90s = 좋음.
   score int check (score between 70 and 100),
   created_at timestamptz not null default now(),
-  unique (card_a_number, card_b_number),
+  unique (card_a_number, card_b_number, kind),
   check (card_a_number <= card_b_number)
 );
 
--- Safe to re-run on a compatibility_matrix table created before this column existed.
+-- Safe to re-run on a compatibility_matrix table created before these
+-- columns existed. The old unique(card_a_number, card_b_number) constraint
+-- (from before 'kind' existed) is replaced with one that includes it.
 alter table public.compatibility_matrix
-  add column if not exists score int check (score between 70 and 100);
+  add column if not exists score int check (score between 70 and 100),
+  add column if not exists kind text not null default 'general' check (kind in ('general','intimacy'));
+
+alter table public.compatibility_matrix drop constraint if exists compatibility_matrix_card_a_number_card_b_number_key;
+alter table public.compatibility_matrix add constraint compatibility_matrix_card_a_number_card_b_number_kind_key
+  unique (card_a_number, card_b_number, kind);
 
 alter table public.compatibility_matrix enable row level security;
 drop policy if exists "public can read compatibility_matrix" on public.compatibility_matrix;

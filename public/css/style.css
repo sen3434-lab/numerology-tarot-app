@@ -266,13 +266,28 @@ button { font-family: inherit; cursor: pointer; }
 .profile-card {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 8px;
   padding: 16px 18px;
   border: 0.8px solid var(--border);
   border-radius: 16px;
   background: var(--card);
   margin-bottom: 12px;
 }
+.profile-card-main {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 1;
+  min-width: 0;
+}
+.profile-edit-btn {
+  flex-shrink: 0;
+  padding: 8px 10px;
+  font-size: 16px;
+  color: var(--muted-foreground);
+  border-radius: var(--radius-sm);
+}
+.profile-edit-btn:hover { color: var(--primary-dark); background: var(--secondary); }
 .profile-card .avatar {
   width: 44px; height: 44px; border-radius: 50%;
   background: var(--secondary);

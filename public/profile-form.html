@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>OZ 넘버타로 · 프로필 추가</title>
+<title id="pageTitle">OZ 넘버타로 · 프로필 추가</title>
 <link rel="stylesheet" href="/css/style.css"/>
 <link rel="manifest" href="/manifest.json"/>
 <meta name="theme-color" content="#bc6338"/>
@@ -25,6 +25,8 @@
       <select id="relation">
         <option value="가족">가족</option>
         <option value="친구">친구</option>
+        <option value="연인">연인</option>
+        <option value="배우자">배우자</option>
         <option value="기타">기타</option>
       </select>
     </div>
@@ -74,16 +76,61 @@ import { requireAuth, getSb, showToast } from '/js/app.js';
 
 const params = new URLSearchParams(location.search);
 const isFirst = params.get('first') === '1';
+const editId = params.get('id');
 
 if (isFirst) {
   document.getElementById('formTitle').textContent = '본인 정보 입력';
   document.getElementById('formSub').textContent = '먼저 본인의 생년월일을 입력해주세요. 본인 프로필은 무료로 이용하실 수 있어요.';
   document.getElementById('relationField').style.display = 'none';
+} else if (editId) {
+  document.getElementById('pageTitle').textContent = 'OZ 넘버타로 · 프로필 수정';
+  document.getElementById('formTitle').textContent = '프로필 수정';
+  document.getElementById('formSub').textContent = '정보를 수정해주세요.';
+  document.getElementById('submitBtn').textContent = '수정';
 }
 
 let session = null;
+let editingProfile = null;
+
+function fillFormFromProfile(profile) {
+  document.getElementById('name').value = profile.name;
+  document.getElementById('year').value = Number(profile.birth_date.slice(0, 4));
+  document.getElementById('month').value = Number(profile.birth_date.slice(5, 7));
+  document.getElementById('day').value = Number(profile.birth_date.slice(8, 10));
+  document.querySelector(`input[name="gender"][value="${profile.gender}"]`).checked = true;
+
+  const isLunarRadio = document.querySelector(`input[name="isLunar"][value="${profile.is_lunar}"]`);
+  if (isLunarRadio) isLunarRadio.checked = true;
+  document.getElementById('isIntercalation').checked = !!profile.is_intercalation;
+  document.querySelector('input[name="isLunar"]:checked').dispatchEvent(new Event('change'));
+
+  if (profile.relation === '본인') {
+    document.getElementById('relationField').style.display = 'none';
+  } else {
+    document.getElementById('relation').value = profile.relation;
+  }
+}
+
 (async () => {
   session = await requireAuth();
+  if (!session) return;
+
+  if (editId) {
+    const sb = await getSb();
+    const { data, error } = await sb
+      .from('profiles')
+      .select('*')
+      .eq('id', editId)
+      .eq('member_id', session.user.id)
+      .maybeSingle();
+    if (error || !data) {
+      showToast('프로필을 찾을 수 없어요.');
+      window.location.href = '/index.html';
+      return;
+    }
+    editingProfile = data;
+    fillFormFromProfile(data);
+  }
 })();
 
 const intercalationField = document.getElementById('intercalationField');
@@ -113,7 +160,8 @@ document.getElementById('profileForm').addEventListener('submit', async (e) => {
   const month = Number(document.getElementById('month').value);
   const day = Number(document.getElementById('day').value);
   const gender = document.querySelector('input[name="gender"]:checked').value;
-  const relation = isFirst ? '본인' : document.getElementById('relation').value;
+  const isSelf = isFirst || (editingProfile && editingProfile.relation === '본인');
+  const relation = isSelf ? '본인' : document.getElementById('relation').value;
   const isLunar = document.querySelector('input[name="isLunar"]:checked').value === 'true';
   const isIntercalation = isLunar && document.getElementById('isIntercalation').checked;
 
@@ -121,27 +169,17 @@ document.getElementById('profileForm').addEventListener('submit', async (e) => {
     errMsg.textContent = '이름과 생년월일을 모두 입력해주세요.';
     errMsg.style.display = 'block';
     submitBtn.disabled = false;
-    submitBtn.textContent = '저장';
+    submitBtn.textContent = editingProfile ? '수정' : '저장';
     return;
   }
 
   const birthDate = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  const profileData = { relation, name, birth_date: birthDate, is_lunar: isLunar, is_intercalation: isIntercalation, gender };
 
   const sb = await getSb();
-  const { data, error } = await sb
-    .from('profiles')
-    .insert({
-      member_id: session.user.id,
-      app_key: 'numerology-tarot',
-      relation,
-      name,
-      birth_date: birthDate,
-      is_lunar: isLunar,
-      is_intercalation: isIntercalation,
-      gender,
-    })
-    .select()
-    .single();
+  const { data, error } = editingProfile
+    ? await sb.from('profiles').update(profileData).eq('id', editingProfile.id).eq('member_id', session.user.id).select().single()
+    : await sb.from('profiles').insert({ ...profileData, member_id: session.user.id, app_key: 'numerology-tarot' }).select().single();
 
   if (error) {
     console.error(error);
@@ -154,11 +192,11 @@ document.getElementById('profileForm').addEventListener('submit', async (e) => {
       errMsg.style.display = 'block';
     }
     submitBtn.disabled = false;
-    submitBtn.textContent = '저장';
+    submitBtn.textContent = editingProfile ? '수정' : '저장';
     return;
   }
 
-  showToast('프로필을 저장했어요 ✓');
+  showToast(editingProfile ? '프로필을 수정했어요 ✓' : '프로필을 저장했어요 ✓');
   window.location.href = `/result.html?id=${data.id}`;
 });
 </script>

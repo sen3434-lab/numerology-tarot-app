@@ -11,6 +11,7 @@
   .profile-head { text-align: center; padding: 4px 0 10px; }
   .profile-head .name { font-size: 19px; font-weight: 600; }
   .profile-head .meta { font-size: 12px; color: var(--muted-foreground); margin-top: 4px; }
+  .profile-head #editLink { display: inline-block; margin-top: 8px; }
 
   .aspect-block { border: 0.8px solid var(--border); border-radius: 18px; padding: 20px; background: var(--card); margin-top: 18px; }
   .aspect-block-head { display: flex; align-items: center; gap: 12px; }
@@ -50,6 +51,7 @@
     <div class="profile-head">
       <div class="name" id="profileName"></div>
       <div class="meta" id="profileMeta"></div>
+      <a class="small muted" id="editLink" href="#">✎ 정보 수정</a>
     </div>
 
     <div id="extBlock"></div>
@@ -147,6 +149,7 @@ async function init() {
 
   document.getElementById('profileName').textContent = profile.name;
   document.getElementById('profileMeta').textContent = `${profile.relation} · ${fmtDate(profile.birth_date)} (${profile.is_lunar ? '음력' : '양력'}${profile.is_intercalation ? ' 윤달' : ''}) · ${profile.gender || ''}`;
+  document.getElementById('editLink').href = `/profile-form.html?id=${profile.id}`;
 
   const { externalNumber, internalNumber } = computeProfileNumbers(profile, paid);
   const conversionFailed = externalNumber === null || internalNumber === null;

@@ -63,8 +63,13 @@ export function computeProfileNumbers(profile, isPaid) {
   };
 }
 
-// External (양력) number only — used by compatibility.html, which only
-// compares people on their external card.
+// External (양력) number only — used for the main compatibility reading.
 export function computeExternalNumber(profile, isPaid) {
   return computeProfileNumbers(profile, isPaid).externalNumber;
+}
+
+// Internal (음력) number only — used for the 속궁합 (intimacy) reading,
+// shown only for 본인-연인 pairs.
+export function computeInternalNumber(profile, isPaid) {
+  return computeProfileNumbers(profile, isPaid).internalNumber;
 }

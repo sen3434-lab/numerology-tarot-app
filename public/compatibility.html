@@ -79,13 +79,32 @@
         <div class="section-label">궁합 리딩</div>
         <p id="summaryText" style="font-size:14px;line-height:1.8;"></p>
       </div>
+
+      <div id="intimacyBox" style="display:none;">
+        <div class="score-box">
+          <div class="score-num" id="intimacyScoreNum"></div>
+          <span class="badge" id="intimacyScoreBadge"></span>
+        </div>
+        <div class="card mt-16" style="text-align:left;">
+          <div class="section-label">속궁합</div>
+          <p id="intimacySummaryText" style="font-size:14px;line-height:1.8;"></p>
+        </div>
+      </div>
     </div>
   </div>
 </div>
 
 <script type="module">
 import { requireAuth, getMember, getSb, isPaidTier, renderBottomNav, showToast } from '/js/app.js';
-import { computeExternalNumber } from '/js/numerology.js';
+import { computeExternalNumber, computeInternalNumber } from '/js/numerology.js';
+
+const ROMANTIC_RELATIONS = ['연인', '배우자'];
+// 속궁합 only ever shows for a 본인 + 연인/배우자 pair — never for
+// family/friend combinations.
+function isRomanticPair(profileA, profileB) {
+  const isSelfPlusPartner = (a, b) => a.relation === '본인' && ROMANTIC_RELATIONS.includes(b.relation);
+  return isSelfPlusPartner(profileA, profileB) || isSelfPlusPartner(profileB, profileA);
+}
 renderBottomNav('/compatibility.html');
 
 let profiles = [];
@@ -155,7 +174,7 @@ document.getElementById('compatForm').addEventListener('submit', async (e) => {
   const [{ data: interpA }, { data: interpB }, { data: match }] = await Promise.all([
     sb.from('numerology_interpretations').select('*, tarot_card:tarot_cards(name)').eq('arcana_number', numA).eq('aspect', 'external').maybeSingle(),
     sb.from('numerology_interpretations').select('*, tarot_card:tarot_cards(name)').eq('arcana_number', numB).eq('aspect', 'external').maybeSingle(),
-    sb.from('compatibility_matrix').select('*').eq('card_a_number', cardAB[0]).eq('card_b_number', cardAB[1]).maybeSingle(),
+    sb.from('compatibility_matrix').select('*').eq('card_a_number', cardAB[0]).eq('card_b_number', cardAB[1]).eq('kind', 'general').maybeSingle(),
   ]);
 
   document.getElementById('nameA').textContent = profileA.name;
@@ -180,6 +199,43 @@ document.getElementById('compatForm').addEventListener('submit', async (e) => {
     const [label, cls] = score >= 90 ? ['좋음', 'badge-active'] : score >= 80 ? ['보통', 'badge-student'] : ['별로', 'badge-free'];
     scoreBadgeEl.textContent = label;
     scoreBadgeEl.className = `badge ${cls}`;
+  }
+
+  const intimacyBox = document.getElementById('intimacyBox');
+  if (isRomanticPair(profileA, profileB)) {
+    const intA = computeInternalNumber(profileA, true);
+    const intB = computeInternalNumber(profileB, true);
+    if (intA !== null && intB !== null) {
+      const intAB = [intA, intB].sort((a, b) => a - b);
+      const { data: intimacyMatch } = await sb
+        .from('compatibility_matrix')
+        .select('*')
+        .eq('card_a_number', intAB[0])
+        .eq('card_b_number', intAB[1])
+        .eq('kind', 'intimacy')
+        .maybeSingle();
+
+      document.getElementById('intimacySummaryText').textContent = intimacyMatch?.summary_text || '아직 이 조합의 속궁합 해설이 등록되지 않았어요.';
+
+      const iScore = intimacyMatch?.score;
+      const iScoreNumEl = document.getElementById('intimacyScoreNum');
+      const iScoreBadgeEl = document.getElementById('intimacyScoreBadge');
+      if (iScore == null) {
+        iScoreNumEl.textContent = '';
+        iScoreBadgeEl.textContent = '점수 준비 중';
+        iScoreBadgeEl.className = 'badge badge-free';
+      } else {
+        iScoreNumEl.innerHTML = `${iScore}<small>점</small>`;
+        const [label, cls] = iScore >= 90 ? ['좋음', 'badge-active'] : iScore >= 80 ? ['보통', 'badge-student'] : ['별로', 'badge-free'];
+        iScoreBadgeEl.textContent = label;
+        iScoreBadgeEl.className = `badge ${cls}`;
+      }
+      intimacyBox.style.display = 'block';
+    } else {
+      intimacyBox.style.display = 'none';
+    }
+  } else {
+    intimacyBox.style.display = 'none';
   }
 
   document.getElementById('resultBox').style.display = 'block';

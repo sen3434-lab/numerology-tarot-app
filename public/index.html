@@ -45,7 +45,7 @@ const roleBadge = document.getElementById('roleBadge');
 const loadingView = document.getElementById('loadingView');
 const listView = document.getElementById('listView');
 
-const RELATION_ICON = { '본인': '🙂', '가족': '👨‍👩‍👧', '친구': '🤝', '기타': '✨' };
+const RELATION_ICON = { '본인': '🙂', '가족': '👨‍👩‍👧', '친구': '🤝', '연인': '💕', '배우자': '💍', '기타': '✨' };
 
 async function init() {
   const session = await requireAuth();
@@ -94,13 +94,16 @@ async function init() {
 
   listView.style.display = 'block';
   listView.innerHTML = ordered.map(p => `
-    <a class="profile-card" href="/result.html?id=${p.id}">
-      <div class="avatar">${RELATION_ICON[p.relation] || '✨'}</div>
-      <div class="info">
-        <div class="name">${p.name}</div>
-        <div class="rel">${p.relation}</div>
-      </div>
-    </a>
+    <div class="profile-card">
+      <a class="profile-card-main" href="/result.html?id=${p.id}">
+        <div class="avatar">${RELATION_ICON[p.relation] || '✨'}</div>
+        <div class="info">
+          <div class="name">${p.name}</div>
+          <div class="rel">${p.relation}</div>
+        </div>
+      </a>
+      <a class="profile-edit-btn" href="/profile-form.html?id=${p.id}" title="수정">✎</a>
+    </div>
   `).join('') + `
     <button class="add-profile-btn mt-8" id="addProfileBtn">
       ${isPaidTier(member) ? '+ 가족/친구 추가' : '🔒 가족/친구 추가 (유료 전환 필요)'}
