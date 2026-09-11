@@ -1,6 +1,6 @@
 {
-  "name": "OZ 넘버타로",
-  "short_name": "OZ 넘버타로",
+  "name": "OZ 넘버스 타로",
+  "short_name": "OZ 넘버스 타로",
   "description": "생년월일 수비학 + 유니버셜 웨이트 타로로 보는 나와 가족, 친구의 성향 그릇",
   "start_url": "/index.html",
   "scope": "/",
