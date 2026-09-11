@@ -1,0 +1,10 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.ozma.numerologytarot",
+    "sha256_cert_fingerprints": [
+      "D8:32:D8:EE:2B:80:6C:6C:85:7A:76:C9:AA:F8:AA:7D:2E:0F:77:85:17:6D:47:E2:31:1F:F9:4E:80:10:54:30"
+    ]
+  }
+}]

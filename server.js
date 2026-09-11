@@ -17,7 +17,10 @@ app.get('/api/config', (req, res) => {
   });
 });
 
-app.use(express.static(path.join(__dirname, 'public')));
+// dotfiles: 'allow' is needed so /.well-known/assetlinks.json (Digital
+// Asset Links, for TWA verification) actually gets served — express.static
+// ignores dot-prefixed paths by default.
+app.use(express.static(path.join(__dirname, 'public'), { dotfiles: 'allow' }));
 
 app.listen(PORT, () => {
   console.log(`Numerology Tarot App running at http://localhost:${PORT}`);
