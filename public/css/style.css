@@ -199,6 +199,8 @@ button { font-family: inherit; cursor: pointer; }
 .badge-free { background: var(--muted); color: var(--muted-foreground); }
 .badge-active { background: rgba(188,99,56,.12); color: var(--primary-dark); }
 
+mark { background: none; color: var(--primary-dark); font-weight: 700; }
+
 .spinner {
   width: 34px; height: 34px;
   border-radius: 50%;

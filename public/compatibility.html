@@ -95,7 +95,7 @@
 </div>
 
 <script type="module">
-import { requireAuth, getMember, getSb, isPaidTier, renderBottomNav, showToast } from '/js/app.js';
+import { requireAuth, getMember, getSb, isPaidTier, renderBottomNav, showToast, renderHighlighted } from '/js/app.js';
 import { computeExternalNumber, computeInternalNumber } from '/js/numerology.js';
 
 const ROMANTIC_RELATIONS = ['연인', '배우자'];
@@ -185,7 +185,7 @@ document.getElementById('compatForm').addEventListener('submit', async (e) => {
   document.getElementById('numB').textContent = numB;
   document.getElementById('cardNameB').textContent = interpB?.tarot_card?.name || '(준비 중)';
 
-  document.getElementById('summaryText').textContent = match?.summary_text || '아직 이 조합의 궁합 해설이 등록되지 않았어요.';
+  document.getElementById('summaryText').innerHTML = renderHighlighted(match?.summary_text) || '아직 이 조합의 궁합 해설이 등록되지 않았어요.';
 
   const score = match?.score;
   const scoreNumEl = document.getElementById('scoreNum');
@@ -215,7 +215,7 @@ document.getElementById('compatForm').addEventListener('submit', async (e) => {
         .eq('kind', 'intimacy')
         .maybeSingle();
 
-      document.getElementById('intimacySummaryText').textContent = intimacyMatch?.summary_text || '아직 이 조합의 속궁합 해설이 등록되지 않았어요.';
+      document.getElementById('intimacySummaryText').innerHTML = renderHighlighted(intimacyMatch?.summary_text) || '아직 이 조합의 속궁합 해설이 등록되지 않았어요.';
 
       const iScore = intimacyMatch?.score;
       const iScoreNumEl = document.getElementById('intimacyScoreNum');

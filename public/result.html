@@ -67,7 +67,7 @@
 </div>
 
 <script type="module">
-import { requireAuth, getMember, getSb, isPaidTier, renderBottomNav, fmtDate } from '/js/app.js';
+import { requireAuth, getMember, getSb, isPaidTier, renderBottomNav, fmtDate, renderHighlighted } from '/js/app.js';
 import { computeProfileNumbers } from '/js/numerology.js';
 renderBottomNav('/index.html');
 
@@ -114,7 +114,7 @@ function renderAspectBlock(container, { label, num, cardName, imageUrl, data }) 
   const traitsHtml = TRAIT_ROWS.map(([field, tag]) => `
     <div class="trait-item">
       <span class="trait-tag">${tag}</span>
-      <p>${data?.[field] || PLACEHOLDER}</p>
+      <p>${renderHighlighted(data?.[field]) || PLACEHOLDER}</p>
     </div>
   `).join('');
 
@@ -128,7 +128,7 @@ function renderAspectBlock(container, { label, num, cardName, imageUrl, data }) 
         </div>
         <div class="head-text">
           <div class="aspect-label">${label}</div>
-          <div class="card-title">${data?.title || cardName || '(준비 중인 카드예요)'}</div>
+          <div class="card-title">${renderHighlighted(data?.title) || cardName || '(준비 중인 카드예요)'}</div>
           <div class="card-name">${cardName || ''}</div>
         </div>
       </div>
