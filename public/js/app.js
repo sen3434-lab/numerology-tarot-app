@@ -149,7 +149,7 @@ export function showToast(msg, ms = 2200) {
 const NAV_ITEMS = [
   { href: '/index.html', ic: '\u{1F3E0}', label: '홈' },
   { href: '/compatibility.html', ic: '\u{1F49E}', label: '궁합' },
-  { href: '/subscribe.html', ic: '\u{2728}', label: '구독' },
+  { href: '/coins.html', ic: '\u{1FA99}', label: '코인' },
   { href: '/settings.html', ic: '\u{2699}\u{FE0F}', label: '설정' },
 ];
 
@@ -178,4 +178,61 @@ export async function requireAuth() {
     return null;
   }
   return session;
+}
+
+// ---------------------------------------------------------------------
+// OZ coin wallet (shared by every OZ tarot app — one balance per account).
+// The browser can only READ its wallet; every grant/charge happens inside
+// database functions, so none of this can be forged from the console.
+// ---------------------------------------------------------------------
+const kstDate = () => new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+export async function getBalance() {
+  const sb = await getSb();
+  const { data } = await sb.from('wallets').select('balance').maybeSingle();
+  return data?.balance ?? 0;
+}
+
+export async function getPrice(item) {
+  const sb = await getSb();
+  const { data } = await sb.from('coin_prices').select('coins').eq('app_key', APP_KEY).eq('item', item).maybeSingle();
+  return data?.coins ?? 1;
+}
+
+// Call once the member row exists. Grants the signup bonus (first time ever)
+// and today's attendance coin (first open of the day, KST). Safe to call
+// repeatedly — the database refuses duplicates — but we remember "done
+// today" to avoid a request on every page. Returns the new balance or null.
+export async function claimFreeCoins(session) {
+  if (!session) return null;
+  const doneKey = `oz_claim_${session.user.id}`;
+  try {
+    if (localStorage.getItem(doneKey) === kstDate()) return null;
+  } catch {}
+  const sb = await getSb();
+  const { data, error } = await sb.rpc('claim_free_coins');
+  if (error || !data?.ok) {
+    if (error) console.error('claim_free_coins failed', error);
+    return null;
+  }
+  try { localStorage.setItem(doneKey, kstDate()); } catch {}
+  const parts = [];
+  if (data.signup > 0) parts.push(`가입 보너스 +${data.signup}코인`);
+  if (data.attendance > 0) parts.push(`출석 보너스 +${data.attendance}코인`);
+  if (data.admin > 0) parts.push(`운영자 지급 +${data.admin}코인`);
+  if (parts.length) showToast('🪙 ' + parts.join(' · '), 3200);
+  return data.balance;
+}
+
+// Free teaser for a soul number: the card's name and artwork are public (so a
+// visitor sees something real before logging in); only the written reading is
+// behind coins. Card artwork comes from the shared 'Universal Waite' deck
+// (1-indexed, Fool = 1) while our arcana numbers are 0-indexed, hence +1.
+export async function getCardTeaser(arcanaNumber) {
+  const sb = await getSb();
+  const [{ data: named }, { data: art }] = await Promise.all([
+    sb.from('tarot_cards').select('name').eq('card_type', '넘버타로').eq('card_num', arcanaNumber).maybeSingle(),
+    sb.from('tarot_cards').select('image_url').eq('card_type', 'Universal Waite').eq('card_num', arcanaNumber + 1).maybeSingle(),
+  ]);
+  return { name: named?.name || null, imageUrl: art?.image_url || null };
 }

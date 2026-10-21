@@ -329,3 +329,26 @@ mark { background: none; color: var(--primary-dark); font-weight: 700; }
 .upsell-box { text-align: center; padding: 22px; background: var(--secondary); border-radius: 16px; margin-top: 20px; }
 .upsell-box .ic { font-size: 22px; margin-bottom: 10px; }
 .upsell-box p { font-size: 13.5px; line-height: 1.6; }
+
+
+/* ---------- soul-number blocks (shared by home preview + result) ---------- */
+.aspect-block { border: 0.8px solid var(--border); border-radius: 18px; padding: 20px; background: var(--card); margin-top: 18px; }
+.aspect-block-head { display: flex; align-items: center; gap: 12px; }
+.card-thumb { width: 46px; aspect-ratio: 3/5; object-fit: cover; border-radius: 6px; flex-shrink: 0; box-shadow: 0 2px 6px rgba(40,30,20,.18); background: var(--muted); }
+.card-num-wrap { flex-shrink: 0; text-align: center; }
+.card-num-wrap .card-num { width: 40px; height: 40px; border-radius: 50%; background: var(--secondary); display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 600; }
+.card-num-wrap .card-num-label { font-size: 9.5px; color: var(--muted-foreground); margin-top: 3px; }
+.aspect-block-head .head-text { min-width: 0; }
+.aspect-block .aspect-label { font-size: 10.5px; letter-spacing: 2px; text-transform: uppercase; color: var(--primary-dark); font-weight: 600; }
+.aspect-block .card-title { font-size: 16px; font-weight: 600; margin-top: 2px; }
+.aspect-block .card-name { font-size: 11.5px; color: var(--muted-foreground); margin-top: 2px; }
+.trait-list { margin-top: 16px; display: flex; flex-direction: column; gap: 12px; }
+.trait-item { display: flex; gap: 12px; }
+.trait-item .trait-tag { flex-shrink: 0; width: 56px; text-align: center; align-self: flex-start; font-size: 11.5px; font-weight: 600; color: var(--accent-foreground); background: var(--accent); border-radius: var(--radius-pill); padding: 4px 0; }
+.trait-item p { font-size: 13px; line-height: 1.7; }
+.trait-item.locked p { color: var(--muted-foreground); }
+
+/* ---------- locked reading: card is free, the reading is coins ---------- */
+.gate-box { text-align: center; padding: 26px 20px; background: var(--secondary); border-radius: 16px; margin: 20px 0; }
+.gate-box .gate-ic { font-size: 28px; margin-bottom: 8px; }
+.gate-box .gate-err { color: var(--danger); font-size: 12.5px; margin-top: 8px; }

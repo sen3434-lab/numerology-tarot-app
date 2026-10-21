@@ -40,7 +40,9 @@
 
 <div class="topbar">
   <a href="/index.html" class="brand">OZ <span>✦</span> 넘버스 타로</a>
-  <div class="topbar-actions"></div>
+  <div class="topbar-actions">
+    <a href="/coins.html" class="badge badge-free" id="coinBadge">🪙</a>
+  </div>
 </div>
 
 <div class="container">
@@ -60,83 +62,91 @@
     <div id="extBlock"></div>
     <div id="intBlock"></div>
 
-    <div class="upsell-box" id="upsellBox" style="display:none;">
-      <div class="ic">✨</div>
-      <p><strong>지금은 0~9번 카드까지만 보여드려요.</strong><br/>유료 전환 시 0~21번 전체 메이저 아르카나로 더 정밀하게 분석해드려요.</p>
-      <a href="/subscribe.html" class="btn btn-primary mt-16">유료로 더 자세히 보기</a>
-    </div>
+    <div id="gateBox" class="gate-box" style="display:none;"></div>
+    <p class="small muted center mt-16" id="unlockedNote" style="display:none;">열어본 해설은 언제든 다시 볼 수 있어요 (무료)</p>
   </div>
 </div>
 
 <script type="module">
-import { requireAuth, getMember, getSb, isPaidTier, renderBottomNav, fmtDate, renderHighlighted } from '/js/app.js';
+import { requireAuth, getMember, getSb, renderBottomNav, fmtDate, claimFreeCoins, getBalance, getPrice, getCardTeaser } from '/js/app.js';
 import { computeProfileNumbers } from '/js/numerology.js';
+import { renderAspectBlock } from '/js/aspect.js';
 renderBottomNav('/index.html');
 
 const params = new URLSearchParams(location.search);
 const profileId = params.get('id');
 
-// The four trait fields are pre-generated (once, offline, via
-// data/generate_content.js) and stored in the DB — so the same card+aspect
-// always reads identically, instead of a fresh (and inconsistent) AI call
-// on every page view.
-async function fetchInterpretation(sb, arcanaNumber, aspect) {
-  const { data } = await sb
-    .from('numerology_interpretations')
-    .select('*, tarot_card:tarot_cards(name, image_url)')
-    .eq('arcana_number', arcanaNumber)
-    .eq('aspect', aspect)
-    .maybeSingle();
-  return data;
+const coinBadge = document.getElementById('coinBadge');
+const gateBox = document.getElementById('gateBox');
+const extBlock = document.getElementById('extBlock');
+const intBlock = document.getElementById('intBlock');
+
+let balance = 0;
+let price = 1;
+let profile = null;
+let ext = null;
+let int = null;
+let extTeaser = null;
+let intTeaser = null;
+
+function updateCoinBadge() {
+  coinBadge.textContent = `🪙 ${balance}`;
 }
 
-// Card artwork comes from the shared 'Universal Waite' deck (already
-// uploaded for other ozma apps), not from our own '넘버타로' tarot_cards
-// rows (those have no images). card_num there is 1-indexed (Fool = 1),
-// while our arcana_number is 0-indexed (Fool = 0), hence the +1.
-async function fetchCardImage(sb, arcanaNumber) {
-  const { data } = await sb
-    .from('tarot_cards')
-    .select('image_url')
-    .eq('card_type', 'Universal Waite')
-    .eq('card_num', arcanaNumber + 1)
-    .maybeSingle();
-  return data?.image_url || null;
+const EXT = { label: '외적 성향 · 양력' };
+const INT = { label: '내적 성향 · 음력' };
+
+function showLocked() {
+  renderAspectBlock(extBlock, { ...EXT, num: ext, cardName: extTeaser.name, imageUrl: extTeaser.imageUrl, locked: true });
+  renderAspectBlock(intBlock, { ...INT, num: int, cardName: intTeaser.name, imageUrl: intTeaser.imageUrl, locked: true });
 }
 
-const TRAIT_ROWS = [
-  ['personality_text', '성향'],
-  ['wealth_text', '재물운'],
-  ['love_text', '애정운'],
-  ['health_text', '건강운'],
-];
-const PLACEHOLDER = '아직 이 카드의 해설이 등록되지 않았어요.';
+function showUnlocked(res) {
+  renderAspectBlock(extBlock, { ...EXT, num: ext, cardName: res.external?.card_name || extTeaser.name, imageUrl: extTeaser.imageUrl, data: res.external });
+  renderAspectBlock(intBlock, { ...INT, num: int, cardName: res.internal?.card_name || intTeaser.name, imageUrl: intTeaser.imageUrl, data: res.internal });
+  gateBox.style.display = 'none';
+  document.getElementById('unlockedNote').style.display = 'block';
+}
 
-function renderAspectBlock(container, { label, num, cardName, imageUrl, data }) {
-  const traitsHtml = TRAIT_ROWS.map(([field, tag]) => `
-    <div class="trait-item">
-      <span class="trait-tag">${tag}</span>
-      <p>${renderHighlighted(data?.[field]) || PLACEHOLDER}</p>
-    </div>
-  `).join('');
+// The soul numbers and cards are free to see; the written reading is coins.
+function renderGate(note) {
+  gateBox.style.display = 'block';
+  if (balance >= price) {
+    gateBox.innerHTML = `
+      <div class="gate-ic">🔓</div>
+      <p><strong>코인 ${price}개로 ${profile.name}님의 해설을 열어볼까요?</strong></p>
+      <p class="muted small mt-8">지금 보유 <b>${balance}코인</b> · 한 번 열면 언제든 다시 볼 수 있어요</p>
+      ${note ? `<p class="gate-err">${note}</p>` : ''}
+      <button class="btn btn-primary btn-block mt-16" id="unlockBtn">해설 열기 (${price}코인)</button>`;
+    document.getElementById('unlockBtn').addEventListener('click', unlock);
+  } else {
+    gateBox.innerHTML = `
+      <div class="gate-ic">🪙</div>
+      <p><strong>코인이 부족해요</strong></p>
+      <p class="muted small mt-8">보유 ${balance}코인 · 해설을 열려면 ${price}코인이 필요해요<br/>충전하시거나, 내일 출석 보너스 1코인을 받아가세요.</p>
+      <a href="/coins.html" class="btn btn-primary btn-block mt-16">코인 충전하기</a>`;
+  }
+}
 
-  container.innerHTML = `
-    <div class="aspect-block">
-      <div class="aspect-block-head">
-        ${imageUrl ? `<img class="card-thumb" src="${imageUrl}" alt="${cardName || ''}"/>` : ''}
-        <div class="card-num-wrap">
-          <div class="card-num">${num}</div>
-          <div class="card-num-label">소울넘버</div>
-        </div>
-        <div class="head-text">
-          <div class="aspect-label">${label}</div>
-          <div class="card-title">${renderHighlighted(data?.title) || cardName || '(준비 중인 카드예요)'}</div>
-          <div class="card-name">${cardName || ''}</div>
-        </div>
-      </div>
-      <div class="trait-list">${traitsHtml}</div>
-    </div>
-  `;
+async function unlock() {
+  const btn = document.getElementById('unlockBtn');
+  btn.disabled = true;
+  btn.textContent = '여는 중...';
+  const sb = await getSb();
+  const { data, error } = await sb.rpc('numerology_unlock_result', { p_profile_id: Number(profile.id), p_ext: ext, p_int: int });
+  if (error || !data) {
+    console.error(error);
+    renderGate('지금은 열지 못했어요. 코인은 차감되지 않았어요. 잠시 후 다시 시도해주세요.');
+    return;
+  }
+  if (!data.ok) {
+    if (typeof data.balance === 'number') { balance = data.balance; updateCoinBadge(); }
+    renderGate(data.reason === 'insufficient_coins' ? '' : '지금은 열 수 없어요. 코인은 차감되지 않았어요.');
+    return;
+  }
+  balance = data.balance ?? balance;
+  updateCoinBadge();
+  showUnlocked(data);
 }
 
 async function init() {
@@ -149,63 +159,53 @@ async function init() {
 
   const member = await getMember(session);
   if (!member) return;
-  const paid = isPaidTier(member);
+  const claimed = await claimFreeCoins(session);
+  balance = claimed ?? await getBalance();
+  price = await getPrice('result');
+  updateCoinBadge();
 
   const sb = await getSb();
-  const { data: profile, error } = await sb
+  const { data, error } = await sb
     .from('profiles')
     .select('*')
     .eq('id', profileId)
     .eq('member_id', session.user.id)
     .maybeSingle();
 
-  if (error || !profile) {
+  if (error || !data) {
     console.error(error);
     document.getElementById('loadingView').innerHTML = '<p class="muted small center">프로필을 찾을 수 없어요.</p>';
     return;
   }
+  profile = data;
 
   document.getElementById('profileName').textContent = profile.name;
   document.getElementById('profileMeta').textContent = `${profile.relation} · ${fmtDate(profile.birth_date)} (${profile.is_lunar ? '음력' : '양력'}${profile.is_intercalation ? ' 윤달' : ''}) · ${profile.gender || ''}`;
   document.getElementById('editLink').href = `/profile-form.html?id=${profile.id}`;
 
-  const { externalNumber, internalNumber } = computeProfileNumbers(profile, paid);
-  const conversionFailed = externalNumber === null || internalNumber === null;
+  // Everyone is read on the full 21-card scale.
+  const numbers = computeProfileNumbers(profile, true);
+  ext = numbers.externalNumber;
+  int = numbers.internalNumber;
 
-  if (conversionFailed) {
+  if (ext === null || int === null) {
     const failMsg = {
       personality_text: '이 생년월일은 음력↔양력 변환 지원 범위(1000~2050년)를 벗어나요.',
       wealth_text: '', love_text: '', health_text: '',
     };
-    renderAspectBlock(document.getElementById('extBlock'), { label: '외적 성향 · 양력', num: '-', cardName: '변환 불가', data: failMsg });
-    renderAspectBlock(document.getElementById('intBlock'), { label: '내적 성향 · 음력', num: '-', cardName: '변환 불가', data: failMsg });
+    renderAspectBlock(extBlock, { ...EXT, num: '-', cardName: '변환 불가', data: failMsg });
+    renderAspectBlock(intBlock, { ...INT, num: '-', cardName: '변환 불가', data: failMsg });
   } else {
-    const [extData, intData, extImage, intImage] = await Promise.all([
-      fetchInterpretation(sb, externalNumber, 'external'),
-      fetchInterpretation(sb, internalNumber, 'internal'),
-      fetchCardImage(sb, externalNumber),
-      fetchCardImage(sb, internalNumber),
-    ]);
+    [extTeaser, intTeaser] = await Promise.all([getCardTeaser(ext), getCardTeaser(int)]);
 
-    renderAspectBlock(document.getElementById('extBlock'), {
-      label: '외적 성향 · 양력',
-      num: externalNumber,
-      cardName: extData?.tarot_card?.name,
-      imageUrl: extImage,
-      data: extData,
-    });
-
-    renderAspectBlock(document.getElementById('intBlock'), {
-      label: '내적 성향 · 음력',
-      num: internalNumber,
-      cardName: intData?.tarot_card?.name,
-      imageUrl: intImage,
-      data: intData,
-    });
-  }
-
-  if (!paid) {
-    document.getElementById('upsellBox').style.display = 'block';
+    // Already opened before? Show it again for free. Otherwise lock it.
+    const { data: peek } = await sb.rpc('numerology_peek_result', { p_profile_id: Number(profile.id), p_ext: ext, p_int: int });
+    if (peek?.ok) {
+      showUnlocked(peek);
+    } else {
+      showLocked();
+      renderGate();
+    }
   }
 
   document.getElementById('loadingView').style.display = 'none';

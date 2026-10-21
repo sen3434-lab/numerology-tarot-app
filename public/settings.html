@@ -49,6 +49,7 @@
         </span>
       </div>
       <div class="row"><span class="rl">등급</span><span id="rowRole"></span></div>
+      <div class="row"><span class="rl">보유 코인</span><span><a href="/coins.html" id="rowCoins" style="color:var(--primary-dark);font-weight:600;">-</a></span></div>
       <div class="row"><span class="rl">가입일</span><span id="rowJoined"></span></div>
     </div>
 
@@ -58,9 +59,13 @@
         <span class="rl">정규 수강생 인증</span>
         <a href="/verify-student.html" class="btn btn-outline btn-sm">인증하기</a>
       </div>
-      <div class="row" id="rowSubscribe">
-        <span class="rl">유료 전환</span>
-        <a href="/subscribe.html" class="btn btn-outline btn-sm">보기</a>
+      <div class="row">
+        <span class="rl">코인 충전 · 내역</span>
+        <a href="/coins.html" class="btn btn-outline btn-sm">보기</a>
+      </div>
+      <div class="row" id="rowAdmin" style="display:none;">
+        <span class="rl">운영자 도구</span>
+        <a href="/admin.html" class="btn btn-outline btn-sm">코인 지급</a>
       </div>
     </div>
 
@@ -70,7 +75,7 @@
 </div>
 
 <script type="module">
-import { getSb, getSession, getMember, signOut, isPaidTier, renderBottomNav, fmtDate, showToast } from '/js/app.js';
+import { getSb, getSession, getMember, getBalance, signOut, renderBottomNav, fmtDate, showToast } from '/js/app.js';
 renderBottomNav('/settings.html');
 
 let currentSession = null;
@@ -90,16 +95,16 @@ async function init() {
 
   document.getElementById('nameInput').value = member.display_name || '';
 
-  const roleLabel = member.role === 'student' ? '🎓 정규 수강생'
-    : member.subscription_status === 'active' ? '✦ 유료 회원'
-    : '무료 회원';
+  const roleLabel = member.role === 'student' ? '🎓 정규 수강생' : '일반 회원';
   document.getElementById('roleBadge').textContent = roleLabel;
-  document.getElementById('roleBadge').className = 'badge mt-8 ' + (member.role === 'student' ? 'badge-student' : member.subscription_status === 'active' ? 'badge-active' : 'badge-free');
+  document.getElementById('roleBadge').className = 'badge mt-8 ' + (member.role === 'student' ? 'badge-student' : 'badge-free');
+  document.getElementById('rowCoins').textContent = '🪙 ' + (await getBalance()) + '코인';
+  const { data: isAdmin } = await (await getSb()).rpc('am_i_admin');
+  if (isAdmin === true) document.getElementById('rowAdmin').style.display = 'flex';
   document.getElementById('rowRole').textContent = roleLabel;
   document.getElementById('rowJoined').textContent = member.created_at ? fmtDate(member.created_at) : '-';
 
   document.getElementById('rowVerify').style.display = member.role === 'student' ? 'none' : 'flex';
-  document.getElementById('rowSubscribe').style.display = isPaidTier(member) ? 'none' : 'flex';
 }
 init();
 

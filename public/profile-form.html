@@ -82,7 +82,7 @@ const editId = params.get('id');
 
 if (isFirst) {
   document.getElementById('formTitle').textContent = '본인 정보 입력';
-  document.getElementById('formSub').textContent = '먼저 본인의 생년월일을 입력해주세요. 본인 프로필은 무료로 이용하실 수 있어요.';
+  document.getElementById('formSub').textContent = '먼저 본인의 생년월일을 입력해주세요. 프로필 등록은 무료예요.';
   document.getElementById('relationField').style.display = 'none';
 } else if (editId) {
   document.getElementById('pageTitle').textContent = 'OZ 넘버스 타로 · 프로필 수정';
@@ -113,9 +113,28 @@ function fillFormFromProfile(profile) {
   }
 }
 
+function applyPendingPreview() {
+  let raw = null;
+  try { raw = sessionStorage.getItem('oz_pending_preview'); sessionStorage.removeItem('oz_pending_preview'); } catch {}
+  if (!raw) return;
+  try {
+    const p = JSON.parse(raw);
+    document.getElementById('year').value = p.year;
+    document.getElementById('month').value = p.month;
+    document.getElementById('day').value = p.day;
+    const radio = document.querySelector(`input[name="isLunar"][value="${!!p.isLunar}"]`);
+    if (radio) radio.checked = true;
+    document.getElementById('isIntercalation').checked = !!p.isIntercalation;
+    document.querySelector('input[name="isLunar"]:checked').dispatchEvent(new Event('change'));
+  } catch (err) {
+    console.error(err);
+  }
+}
+
 (async () => {
   session = await requireAuth();
   if (!session) return;
+  if (isFirst) applyPendingPreview();
 
   if (editId) {
     const sb = await getSb();
@@ -185,14 +204,10 @@ document.getElementById('profileForm').addEventListener('submit', async (e) => {
 
   if (error) {
     console.error(error);
-    if (String(error.message || '').includes('upgrade_required')) {
-      errMsg.textContent = '가족/친구 추가는 유료 전환 후 이용하실 수 있어요.';
-      errMsg.style.display = 'block';
-      setTimeout(() => window.location.href = '/subscribe.html', 1200);
-    } else {
-      errMsg.textContent = '저장에 실패했어요. 다시 시도해주세요.';
-      errMsg.style.display = 'block';
-    }
+    errMsg.textContent = String(error.message || '').includes('profile_limit')
+      ? '프로필은 최대 30개까지 만들 수 있어요.'
+      : '저장에 실패했어요. 다시 시도해주세요.';
+    errMsg.style.display = 'block';
     submitBtn.disabled = false;
     submitBtn.textContent = editingProfile ? '수정' : '저장';
     return;

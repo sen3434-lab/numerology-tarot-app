@@ -27,7 +27,9 @@
 
 <div class="topbar">
   <a href="/index.html" class="brand">OZ <span>✦</span> 넘버스 타로</a>
-  <div class="topbar-actions"></div>
+  <div class="topbar-actions">
+    <a href="/coins.html" class="badge badge-free" id="coinBadge">🪙</a>
+  </div>
 </div>
 
 <div class="container">
@@ -38,8 +40,7 @@
 
   <div id="gateView" style="display:none;" class="upsell-box">
     <div class="ic">💞</div>
-    <p><strong>궁합 보기는 유료 전용 기능이에요.</strong><br/>유료로 전환하시면 등록하신 프로필끼리 궁합을 바로 확인하실 수 있어요.</p>
-    <a href="/subscribe.html" class="btn btn-primary mt-16">유료로 전환하기</a>
+
   </div>
 
   <div id="mainView" style="display:none;">
@@ -72,6 +73,9 @@
         </div>
       </div>
 
+      <div id="compatGate" class="gate-box" style="display:none;"></div>
+
+      <div id="compatContent" style="display:none;">
       <div class="score-box">
         <div class="score-num" id="scoreNum"></div>
         <span class="badge" id="scoreBadge"></span>
@@ -92,24 +96,29 @@
           <p id="intimacySummaryText" style="font-size:14px;line-height:1.8;"></p>
         </div>
       </div>
+      </div>
     </div>
   </div>
 </div>
 
 <script type="module">
-import { requireAuth, getMember, getSb, isPaidTier, renderBottomNav, showToast, renderHighlighted } from '/js/app.js';
+import { requireAuth, getMember, getSb, renderBottomNav, showToast, renderHighlighted, claimFreeCoins, getBalance, getPrice, getCardTeaser } from '/js/app.js';
 import { computeExternalNumber, computeInternalNumber } from '/js/numerology.js';
 
-const ROMANTIC_RELATIONS = ['연인', '배우자'];
-// 속궁합 only ever shows for a 본인 + 연인/배우자 pair — never for
-// family/friend combinations.
-function isRomanticPair(profileA, profileB) {
-  const isSelfPlusPartner = (a, b) => a.relation === '본인' && ROMANTIC_RELATIONS.includes(b.relation);
-  return isSelfPlusPartner(profileA, profileB) || isSelfPlusPartner(profileB, profileA);
-}
 renderBottomNav('/compatibility.html');
 
+const coinBadge = document.getElementById('coinBadge');
+const compatGate = document.getElementById('compatGate');
+const compatContent = document.getElementById('compatContent');
+
 let profiles = [];
+let balance = 0;
+let price = 1;
+let pair = null; // the pair currently on screen
+
+function updateCoinBadge() {
+  coinBadge.textContent = `🪙 ${balance}`;
+}
 
 async function init() {
   const session = await requireAuth();
@@ -118,12 +127,12 @@ async function init() {
   const member = await getMember(session);
   if (!member) return;
 
-  document.getElementById('loadingView').style.display = 'none';
+  const claimed = await claimFreeCoins(session);
+  balance = claimed ?? await getBalance();
+  price = await getPrice('compatibility');
+  updateCoinBadge();
 
-  if (!isPaidTier(member)) {
-    document.getElementById('gateView').style.display = 'block';
-    return;
-  }
+  document.getElementById('loadingView').style.display = 'none';
 
   const sb = await getSb();
   const { data, error } = await sb
@@ -135,7 +144,7 @@ async function init() {
   if (error || !data || data.length < 2) {
     document.getElementById('gateView').innerHTML = `
       <div class="ic">💞</div>
-      <p><strong>궁합을 보려면 프로필이 2명 이상 필요해요.</strong></p>
+      <p><strong>궁합을 보려면 프로필이 2명 이상 필요해요.</strong><br/>프로필 추가는 무료예요.</p>
       <a href="/profile-form.html" class="btn btn-primary mt-16">프로필 추가하기</a>
     `;
     document.getElementById('gateView').style.display = 'block';
@@ -152,6 +161,85 @@ async function init() {
 }
 init();
 
+function scoreBadge(score, scoreNumEl, badgeEl) {
+  if (score == null) {
+    scoreNumEl.textContent = '';
+    badgeEl.textContent = '점수 준비 중';
+    badgeEl.className = 'badge badge-free';
+    return;
+  }
+  scoreNumEl.innerHTML = `${score}<small>점</small>`;
+  const [label, cls] = score >= 90 ? ['좋음', 'badge-active'] : score >= 80 ? ['보통', 'badge-student'] : ['별로', 'badge-free'];
+  badgeEl.textContent = label;
+  badgeEl.className = `badge ${cls}`;
+}
+
+// What the server hands back once the pair is opened (paid, or already paid).
+function showOpened(data) {
+  if (data.card_a_name) document.getElementById('cardNameA').textContent = data.card_a_name;
+  if (data.card_b_name) document.getElementById('cardNameB').textContent = data.card_b_name;
+
+  document.getElementById('summaryText').innerHTML = renderHighlighted(data.general?.summary_text) || '아직 이 조합의 궁합 해설이 등록되지 않았어요.';
+  scoreBadge(data.general?.score, document.getElementById('scoreNum'), document.getElementById('scoreBadge'));
+
+  const intimacyBox = document.getElementById('intimacyBox');
+  if (data.romantic) {
+    document.getElementById('intimacySummaryText').innerHTML = renderHighlighted(data.intimacy?.summary_text) || '아직 이 조합의 속궁합 해설이 등록되지 않았어요.';
+    scoreBadge(data.intimacy?.score, document.getElementById('intimacyScoreNum'), document.getElementById('intimacyScoreBadge'));
+    intimacyBox.style.display = 'block';
+  } else {
+    intimacyBox.style.display = 'none';
+  }
+
+  compatGate.style.display = 'none';
+  compatContent.style.display = 'block';
+}
+
+function renderGate(note) {
+  compatContent.style.display = 'none';
+  compatGate.style.display = 'block';
+  if (balance >= price) {
+    compatGate.innerHTML = `
+      <div class="gate-ic">🔓</div>
+      <p><strong>코인 ${price}개로 두 사람의 궁합을 열어볼까요?</strong></p>
+      <p class="muted small mt-8">지금 보유 <b>${balance}코인</b> · 한 번 열면 언제든 다시 볼 수 있어요</p>
+      ${note ? `<p class="gate-err">${note}</p>` : ''}
+      <button class="btn btn-primary btn-block mt-16" id="unlockCompat">궁합 열기 (${price}코인)</button>`;
+    document.getElementById('unlockCompat').addEventListener('click', unlock);
+  } else {
+    compatGate.innerHTML = `
+      <div class="gate-ic">🪙</div>
+      <p><strong>코인이 부족해요</strong></p>
+      <p class="muted small mt-8">보유 ${balance}코인 · 궁합을 열려면 ${price}코인이 필요해요<br/>충전하시거나, 내일 출석 보너스 1코인을 받아가세요.</p>
+      <a href="/coins.html" class="btn btn-primary btn-block mt-16">코인 충전하기</a>`;
+  }
+}
+
+function rpcArgs() {
+  return { p_a: Number(pair.idA), p_b: Number(pair.idB), p_a_ext: pair.extA, p_b_ext: pair.extB, p_a_int: pair.intA, p_b_int: pair.intB };
+}
+
+async function unlock() {
+  const btn = document.getElementById('unlockCompat');
+  btn.disabled = true;
+  btn.textContent = '여는 중...';
+  const sb = await getSb();
+  const { data, error } = await sb.rpc('numerology_unlock_compat', rpcArgs());
+  if (error || !data) {
+    console.error(error);
+    renderGate('지금은 열지 못했어요. 코인은 차감되지 않았어요. 잠시 후 다시 시도해주세요.');
+    return;
+  }
+  if (!data.ok) {
+    if (typeof data.balance === 'number') { balance = data.balance; updateCoinBadge(); }
+    renderGate(data.reason === 'insufficient_coins' ? '' : '지금은 열 수 없어요. 코인은 차감되지 않았어요.');
+    return;
+  }
+  balance = data.balance ?? balance;
+  updateCoinBadge();
+  showOpened(data);
+}
+
 document.getElementById('compatForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const idA = document.getElementById('profileA').value;
@@ -164,83 +252,34 @@ document.getElementById('compatForm').addEventListener('submit', async (e) => {
   const profileA = profiles.find(p => String(p.id) === idA);
   const profileB = profiles.find(p => String(p.id) === idB);
 
-  const numA = computeExternalNumber(profileA, true);
-  const numB = computeExternalNumber(profileB, true);
-  if (numA === null || numB === null) {
+  // Everyone is read on the full 21-card scale.
+  const extA = computeExternalNumber(profileA, true);
+  const extB = computeExternalNumber(profileB, true);
+  const intA = computeInternalNumber(profileA, true);
+  const intB = computeInternalNumber(profileB, true);
+  if ([extA, extB, intA, intB].includes(null)) {
     showToast('생년월일 변환 지원 범위를 벗어난 프로필이 있어요.');
     return;
   }
-  const cardAB = [numA, numB].sort((a, b) => a - b);
+  pair = { idA, idB, extA, extB, intA, intB };
+
+  // Names, soul numbers and cards are free; score + reading are coins.
+  const [cardA, cardB] = await Promise.all([getCardTeaser(extA), getCardTeaser(extB)]);
+  document.getElementById('nameA').textContent = profileA.name;
+  document.getElementById('numA').textContent = extA;
+  document.getElementById('cardNameA').textContent = cardA.name || '(준비 중)';
+  document.getElementById('nameB').textContent = profileB.name;
+  document.getElementById('numB').textContent = extB;
+  document.getElementById('cardNameB').textContent = cardB.name || '(준비 중)';
+  document.getElementById('resultBox').style.display = 'block';
 
   const sb = await getSb();
-  const [{ data: interpA }, { data: interpB }, { data: match }] = await Promise.all([
-    sb.from('numerology_interpretations').select('*, tarot_card:tarot_cards(name)').eq('arcana_number', numA).eq('aspect', 'external').maybeSingle(),
-    sb.from('numerology_interpretations').select('*, tarot_card:tarot_cards(name)').eq('arcana_number', numB).eq('aspect', 'external').maybeSingle(),
-    sb.from('compatibility_matrix').select('*').eq('card_a_number', cardAB[0]).eq('card_b_number', cardAB[1]).eq('kind', 'general').maybeSingle(),
-  ]);
-
-  document.getElementById('nameA').textContent = profileA.name;
-  document.getElementById('numA').textContent = numA;
-  document.getElementById('cardNameA').textContent = interpA?.tarot_card?.name || '(준비 중)';
-
-  document.getElementById('nameB').textContent = profileB.name;
-  document.getElementById('numB').textContent = numB;
-  document.getElementById('cardNameB').textContent = interpB?.tarot_card?.name || '(준비 중)';
-
-  document.getElementById('summaryText').innerHTML = renderHighlighted(match?.summary_text) || '아직 이 조합의 궁합 해설이 등록되지 않았어요.';
-
-  const score = match?.score;
-  const scoreNumEl = document.getElementById('scoreNum');
-  const scoreBadgeEl = document.getElementById('scoreBadge');
-  if (score == null) {
-    scoreNumEl.textContent = '';
-    scoreBadgeEl.textContent = '점수 준비 중';
-    scoreBadgeEl.className = 'badge badge-free';
+  const { data: peek } = await sb.rpc('numerology_peek_compat', rpcArgs());
+  if (peek?.ok) {
+    showOpened(peek);
   } else {
-    scoreNumEl.innerHTML = `${score}<small>점</small>`;
-    const [label, cls] = score >= 90 ? ['좋음', 'badge-active'] : score >= 80 ? ['보통', 'badge-student'] : ['별로', 'badge-free'];
-    scoreBadgeEl.textContent = label;
-    scoreBadgeEl.className = `badge ${cls}`;
+    renderGate();
   }
-
-  const intimacyBox = document.getElementById('intimacyBox');
-  if (isRomanticPair(profileA, profileB)) {
-    const intA = computeInternalNumber(profileA, true);
-    const intB = computeInternalNumber(profileB, true);
-    if (intA !== null && intB !== null) {
-      const intAB = [intA, intB].sort((a, b) => a - b);
-      const { data: intimacyMatch } = await sb
-        .from('compatibility_matrix')
-        .select('*')
-        .eq('card_a_number', intAB[0])
-        .eq('card_b_number', intAB[1])
-        .eq('kind', 'intimacy')
-        .maybeSingle();
-
-      document.getElementById('intimacySummaryText').innerHTML = renderHighlighted(intimacyMatch?.summary_text) || '아직 이 조합의 속궁합 해설이 등록되지 않았어요.';
-
-      const iScore = intimacyMatch?.score;
-      const iScoreNumEl = document.getElementById('intimacyScoreNum');
-      const iScoreBadgeEl = document.getElementById('intimacyScoreBadge');
-      if (iScore == null) {
-        iScoreNumEl.textContent = '';
-        iScoreBadgeEl.textContent = '점수 준비 중';
-        iScoreBadgeEl.className = 'badge badge-free';
-      } else {
-        iScoreNumEl.innerHTML = `${iScore}<small>점</small>`;
-        const [label, cls] = iScore >= 90 ? ['좋음', 'badge-active'] : iScore >= 80 ? ['보통', 'badge-student'] : ['별로', 'badge-free'];
-        iScoreBadgeEl.textContent = label;
-        iScoreBadgeEl.className = `badge ${cls}`;
-      }
-      intimacyBox.style.display = 'block';
-    } else {
-      intimacyBox.style.display = 'none';
-    }
-  } else {
-    intimacyBox.style.display = 'none';
-  }
-
-  document.getElementById('resultBox').style.display = 'block';
 });
 </script>
 </body>

@@ -21,7 +21,7 @@
 <div class="topbar">
   <a href="/index.html" class="brand">OZ <span>✦</span> 넘버스 타로</a>
   <div class="topbar-actions">
-    <span class="badge badge-free" id="roleBadge">불러오는 중</span>
+    <a href="/coins.html" class="badge badge-free" id="coinBadge">🪙</a>
   </div>
 </div>
 
@@ -37,35 +37,123 @@
   </div>
 
   <div id="listView" style="display:none;"></div>
+
+  <div id="previewView" style="display:none;">
+    <form id="previewForm" class="mt-24">
+      <div class="field">
+        <label>양력 / 음력</label>
+        <div class="radio-row">
+          <label><input type="radio" name="pvLunar" value="false" checked/> 양력</label>
+          <label><input type="radio" name="pvLunar" value="true"/> 음력</label>
+        </div>
+        <label class="mt-8" id="pvInterField" style="display:none;align-items:center;gap:6px;font-size:12.5px;font-weight:normal;color:var(--foreground);cursor:pointer;">
+          <input type="checkbox" id="pvInter" style="width:auto;"/> 윤달이에요
+        </label>
+      </div>
+      <div class="field">
+        <label>생년월일</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+          <input type="number" id="pvYear" required placeholder="1990" min="1000" max="2050"/>
+          <input type="number" id="pvMonth" required placeholder="월" min="1" max="12"/>
+          <input type="number" id="pvDay" required placeholder="일" min="1" max="31"/>
+        </div>
+        <p class="small muted mt-8">로그인 없이 내 소울넘버와 카드를 먼저 확인해보세요.</p>
+      </div>
+      <button type="submit" class="btn btn-primary btn-block">내 소울넘버 미리보기</button>
+    </form>
+
+    <div id="previewResult" style="display:none;">
+      <div id="pvExt"></div>
+      <div id="pvInt"></div>
+      <div id="pvGate" class="gate-box"></div>
+    </div>
+  </div>
 </div>
 
 <script type="module">
-import { requireAuth, getMember, getSb, isPaidTier, renderBottomNav, showToast } from '/js/app.js';
+import { getSession, getMember, getSb, renderBottomNav, claimFreeCoins, getBalance, getCardTeaser } from '/js/app.js';
+import { computeProfileNumbers } from '/js/numerology.js';
+import { renderAspectBlock } from '/js/aspect.js';
 renderBottomNav('/index.html');
 
-const roleBadge = document.getElementById('roleBadge');
+const coinBadge = document.getElementById('coinBadge');
 const loadingView = document.getElementById('loadingView');
 const listView = document.getElementById('listView');
+const previewView = document.getElementById('previewView');
 
 const RELATION_ICON = { '본인': '🙂', '가족': '👨‍👩‍👧', '친구': '🤝', '연인': '💕', '배우자': '💍', '기타': '✨' };
 
+// ---------- Not logged in: show the soul number + card for free ----------
+// Everything up to the written reading is free to see; the reading itself is
+// coins, which a new account starts with (5 signup coins).
+function showPreview() {
+  loadingView.style.display = 'none';
+  previewView.style.display = 'block';
+  coinBadge.textContent = '로그인';
+  coinBadge.setAttribute('href', '/auth.html');
+  coinBadge.className = 'badge badge-free';
+
+  document.querySelectorAll('input[name="pvLunar"]').forEach((radio) => {
+    radio.addEventListener('change', () => {
+      const isLunar = document.querySelector('input[name="pvLunar"]:checked').value === 'true';
+      document.getElementById('pvInterField').style.display = isLunar ? 'flex' : 'none';
+    });
+  });
+
+  document.getElementById('previewForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const year = Number(document.getElementById('pvYear').value);
+    const month = Number(document.getElementById('pvMonth').value);
+    const day = Number(document.getElementById('pvDay').value);
+    const isLunar = document.querySelector('input[name="pvLunar"]:checked').value === 'true';
+    const isIntercalation = isLunar && document.getElementById('pvInter').checked;
+
+    const birthDate = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const { externalNumber, internalNumber } = computeProfileNumbers(
+      { birth_date: birthDate, is_lunar: isLunar, is_intercalation: isIntercalation }, true);
+
+    const result = document.getElementById('previewResult');
+    if (externalNumber === null || internalNumber === null) {
+      result.style.display = 'block';
+      document.getElementById('pvExt').innerHTML = '';
+      document.getElementById('pvInt').innerHTML = '';
+      document.getElementById('pvGate').innerHTML = '<p class="muted small">이 생년월일은 음력↔양력 변환 지원 범위(1000~2050년)를 벗어나요. 날짜를 다시 확인해주세요.</p>';
+      return;
+    }
+
+    const [ext, int] = await Promise.all([getCardTeaser(externalNumber), getCardTeaser(internalNumber)]);
+    renderAspectBlock(document.getElementById('pvExt'), { label: '외적 성향 · 양력', num: externalNumber, cardName: ext.name, imageUrl: ext.imageUrl, locked: true });
+    renderAspectBlock(document.getElementById('pvInt'), { label: '내적 성향 · 음력', num: internalNumber, cardName: int.name, imageUrl: int.imageUrl, locked: true });
+
+    document.getElementById('pvGate').innerHTML = `
+      <div class="gate-ic">🔒</div>
+      <p><strong>성향·재물·애정·건강 해설은 코인 1개로 열려요</strong></p>
+      <p class="muted small mt-8">로그인하면 <b>가입 보너스 5코인</b>을 바로 드려요.<br/>매일 앱에 들어오면 1코인씩 더 드려요.</p>
+      <button class="btn btn-primary btn-block mt-16" id="pvLogin">로그인하고 5코인 받기</button>`;
+    document.getElementById('pvLogin').addEventListener('click', () => {
+      try {
+        sessionStorage.setItem('oz_pending_preview', JSON.stringify({ year, month, day, isLunar, isIntercalation }));
+      } catch {}
+      window.location.href = '/auth.html';
+    });
+    result.style.display = 'block';
+    result.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+}
+
+// ---------- Logged in: profile list ----------
 async function init() {
-  const session = await requireAuth();
-  if (!session) return;
+  const session = await getSession();
+  if (!session) { showPreview(); return; }
 
   const member = await getMember(session);
   if (!member) return;
 
-  if (member.role === 'student') {
-    roleBadge.textContent = '🎓 정규 수강생 · 무제한';
-    roleBadge.className = 'badge badge-student';
-  } else if (member.subscription_status === 'active') {
-    roleBadge.textContent = '✦ 구독중 · 무제한';
-    roleBadge.className = 'badge badge-active';
-  } else {
-    roleBadge.textContent = '무료 회원';
-    roleBadge.className = 'badge badge-free';
-  }
+  const claimed = await claimFreeCoins(session);
+  const balance = claimed ?? await getBalance();
+  coinBadge.textContent = `🪙 ${balance}`;
+  coinBadge.setAttribute('href', '/coins.html');
+  coinBadge.className = 'badge badge-active';
 
   const sb = await getSb();
   const { data: profiles, error } = await sb
@@ -107,18 +195,11 @@ async function init() {
       <a class="profile-edit-btn" href="/profile-form.html?id=${p.id}" title="수정">✎</a>
     </div>
   `).join('') + `
-    <button class="add-profile-btn mt-8" id="addProfileBtn">
-      ${isPaidTier(member) ? '+ 가족/친구 추가' : '🔒 가족/친구 추가 (유료 전환 필요)'}
-    </button>
+    <button class="add-profile-btn mt-8" id="addProfileBtn">+ 가족/친구 추가 (무료)</button>
   `;
 
   document.getElementById('addProfileBtn').addEventListener('click', () => {
-    if (isPaidTier(member)) {
-      window.location.href = '/profile-form.html';
-    } else {
-      showToast('가족/친구 추가는 유료 전환 후 이용하실 수 있어요.');
-      setTimeout(() => window.location.href = '/subscribe.html', 900);
-    }
+    window.location.href = '/profile-form.html';
   });
 }
 init();
