@@ -108,13 +108,6 @@ export async function getMember(session, nickname) {
   return ensureMemberRow(session, nickname);
 }
 
-// True when the member has full (paid) access: an active subscription or
-// the 'student' role. Used to gate extra profiles, the 0-21 card range,
-// and compatibility readings.
-export function isPaidTier(member) {
-  return !!member && (member.role === 'student' || member.subscription_status === 'active');
-}
-
 // Generated reading text wraps its one key phrase per paragraph in
 // **asterisks** (see data/generate_content.js prompts) — this turns that
 // into a colored <mark>, and escapes everything else so the text is safe

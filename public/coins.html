@@ -87,6 +87,7 @@
 <script type="module">
 import { getSb, getSession, getMember, claimFreeCoins, getBalance, renderBottomNav, fmtDate, APP_KEY } from '/js/app.js';
 import { OZ_APPS, playUrl, shortName } from '/js/ozApps.js';
+import { billingState, buyPack, restorePurchases } from '/js/billing.js';
 
 renderBottomNav('/coins.html');
 
@@ -147,6 +148,53 @@ function renderFamily() {
 }
 renderFamily();
 
+const PAY_NOTE = {
+  not_in_app: '코인 충전은 <b>구글 플레이에서 설치한 앱</b>에서 할 수 있어요.',
+  server_off: '결제 기능을 준비 중이에요. 곧 만나보실 수 있어요.',
+  ok: '결제는 구글 플레이로 안전하게 진행돼요. 충전한 코인은 모든 OZ 타로 앱에서 함께 써요.',
+};
+const ERR_TEXT = {
+  not_in_app: '구글 플레이에서 설치한 앱에서만 결제할 수 있어요.',
+  purchase_pending: '결제가 아직 확정되지 않았어요. 완료되면 코인이 자동으로 들어와요.',
+  network_pending: '결제는 됐는데 연결이 불안정해요. 잠시 뒤 이 화면을 다시 열면 코인이 들어와요.',
+  login_required: '로그인이 풀렸어요. 다시 로그인해 주세요.',
+};
+
+async function setupPurchasing(products, accessToken) {
+  const noteEl = document.getElementById('payNote');
+  const state = await billingState();
+  noteEl.innerHTML = PAY_NOTE[state];
+  if (state === 'not_in_app') {
+    const self = OZ_APPS.find((a) => a.key === APP_KEY);
+    if (self && self.packageId) noteEl.innerHTML += '<br/><a href="' + playUrl(self.packageId) + '" style="color:var(--primary-dark);font-weight:600;">구글 플레이에서 열기</a>';
+  }
+  if (state !== 'ok') return;
+
+  const prices = Object.fromEntries(products.map((p) => [p.product_id, p.price_krw]));
+  const buttons = [...document.querySelectorAll('#products button[data-id]')];
+  buttons.forEach((b) => { b.disabled = false; });
+
+  async function afterCredit(balance, message) {
+    if (balance != null) document.getElementById('balance').textContent = balance;
+    noteEl.textContent = message;
+    setTimeout(() => location.reload(), 1500);
+  }
+
+  buttons.forEach((b) => b.addEventListener('click', async () => {
+    buttons.forEach((x) => { x.disabled = true; });
+    noteEl.textContent = '결제 창을 여는 중이에요…';
+    const r = await buyPack(accessToken, b.dataset.id, prices[b.dataset.id]);
+    if (r.ok) return afterCredit(r.balance, '충전됐어요! 🪙 ' + r.coins + '코인이 들어왔어요.');
+    buttons.forEach((x) => { x.disabled = false; });
+    if (r.cancelled) { noteEl.innerHTML = PAY_NOTE.ok; return; }
+    noteEl.textContent = ERR_TEXT[r.error] || '결제를 마무리하지 못했어요. 코인이 들어오지 않았다면 잠시 뒤 이 화면을 다시 열어 주세요.';
+  }));
+
+  // paid-but-never-credited purchases (app closed mid-purchase) are credited here
+  const back = await restorePurchases(accessToken);
+  if (back.restored > 0) afterCredit(back.balance, '이전에 결제하신 코인 ' + back.restored + '건을 찾아 넣어드렸어요.');
+}
+
 async function init() {
   const session = await getSession();
   if (!session) { document.getElementById('gate').style.display = 'block'; return; }
@@ -163,6 +211,7 @@ async function init() {
   ]);
 
   document.getElementById('balance').textContent = bal;
+  const accessToken = session.access_token;
 
   const productsEl = document.getElementById('products');
   productsEl.innerHTML = '';
@@ -180,6 +229,8 @@ async function init() {
       <button class="btn btn-primary btn-sm" data-id="${p.product_id}" disabled>${won(p.price_krw)}</button>`;
     productsEl.appendChild(el);
   });
+
+  await setupPurchasing(products.data || [], accessToken);
 
   const ledgerEl = document.getElementById('ledger');
   ledgerEl.innerHTML = '';
