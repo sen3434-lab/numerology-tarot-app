@@ -135,11 +135,8 @@ function renderFamily() {
     if (!current) {
       if (a.packageId) {
         acts.innerHTML = `<a class="btn btn-primary btn-sm" href="${playUrl(a.packageId)}">다운받기</a>`;
-        if (a.web) acts.innerHTML += `<a class="btn btn-outline btn-sm" href="${a.web}">웹으로 열기</a>`;
-      } else if (a.web) {
-        acts.innerHTML = `<a class="btn btn-outline btn-sm" href="${a.web}">웹으로 열기</a><div class="soon">앱은 곧 만나요</div>`;
       } else {
-        acts.innerHTML = '<div class="soon">준비 중이에요</div>';
+        acts.innerHTML = '<div class="soon">곧 만나요</div>';
       }
     }
     row.append(info, acts);
