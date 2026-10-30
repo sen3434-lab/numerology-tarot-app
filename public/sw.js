@@ -1,4 +1,4 @@
-const CACHE_NAME = 'numerology-tarot-v1';
+const CACHE_NAME = 'numerology-tarot-v2';
 const APP_SHELL = [
   '/index.html',
   '/css/style.css',

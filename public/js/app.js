@@ -142,6 +142,7 @@ export function showToast(msg, ms = 2200) {
 const NAV_ITEMS = [
   { href: '/index.html', ic: '\u{1F3E0}', label: '홈' },
   { href: '/compatibility.html', ic: '\u{1F49E}', label: '궁합' },
+  { href: '/history.html', ic: '\u{1F4D6}', label: '기록' },
   { href: '/coins.html', ic: '\u{1FA99}', label: '코인' },
   { href: '/settings.html', ic: '\u{2699}\u{FE0F}', label: '설정' },
 ];

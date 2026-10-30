@@ -158,6 +158,15 @@ async function init() {
   document.getElementById('profileB').selectedIndex = 1;
 
   document.getElementById('mainView').style.display = 'block';
+
+  // 기록에서 들어오면 두 사람을 미리 골라 바로 보여준다 (이미 연 궁합은 무료).
+  const q = new URLSearchParams(location.search);
+  const qa = q.get('a'), qb = q.get('b');
+  if (qa && qb && qa !== qb && profiles.some(p => String(p.id) === qa) && profiles.some(p => String(p.id) === qb)) {
+    document.getElementById('profileA').value = qa;
+    document.getElementById('profileB').value = qb;
+    document.getElementById('compatForm').requestSubmit();
+  }
 }
 init();
 

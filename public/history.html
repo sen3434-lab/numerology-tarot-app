@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>OZ 넘버스 타로 · 기록</title>
+<link rel="stylesheet" href="/css/style.css"/>
+<link rel="manifest" href="/manifest.json"/>
+<meta name="theme-color" content="#bc6338"/>
+<link rel="icon" href="/icons/icon-192.png"/>
+<link rel="apple-touch-icon" href="/icons/icon-192.png"/>
+<style>
+  .hero { text-align: center; padding: 10px 0 18px; }
+  .hero-eyebrow { font-size: 10.5px; letter-spacing: 5px; color: var(--primary); font-weight: 600; text-transform: uppercase; }
+  .hero h1 { font-size: 20px; margin-top: 8px; }
+  .hero p { color: var(--muted-foreground); font-size: 13px; margin-top: 8px; line-height: 1.7; }
+  .h-item .info .rel { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
+  .h-item .info .rel span { white-space: nowrap; }
+  .h-item .kind { font-size: 10.5px; font-weight: 600; color: var(--primary-dark); background: var(--secondary); border-radius: 999px; padding: 2px 8px; }
+  .h-item.gone { opacity: .6; }
+  .h-note { text-align: center; font-size: 12px; color: var(--muted-foreground); margin-top: 18px; line-height: 1.7; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <a href="/index.html" class="brand">OZ <span>✦</span> 넘버스 타로</a>
+  <div class="topbar-actions">
+    <a href="/coins.html" class="badge badge-free" id="coinBadge">🪙</a>
+  </div>
+</div>
+
+<div class="container">
+  <div id="loadingView" class="center" style="padding:60px 0;"><div class="spinner"></div></div>
+
+  <div id="mainView" style="display:none;">
+    <div class="hero">
+      <div class="hero-eyebrow">History</div>
+      <h1>열어본 해설 기록</h1>
+      <p>코인으로 연 성향 해설과 궁합은 여기에 저장돼요.<br/>다시 볼 때는 코인이 들지 않아요.</p>
+    </div>
+    <div id="list"></div>
+    <p class="h-note" id="note"></p>
+  </div>
+</div>
+
+<script type="module">
+import { requireAuth, getMember, getSb, renderBottomNav, claimFreeCoins, getBalance } from '/js/app.js';
+
+renderBottomNav('/history.html');
+
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const fmt = (iso) => { const d = new Date(iso); return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일`; };
+
+async function init() {
+  const session = await requireAuth();
+  if (!session) return;
+  const member = await getMember(session);
+  if (!member) return;
+
+  const claimed = await claimFreeCoins(session);
+  const balance = claimed ?? await getBalance();
+  document.getElementById('coinBadge').textContent = `🪙 ${balance}`;
+
+  const sb = await getSb();
+  const [unl, prof] = await Promise.all([
+    sb.from('unlocked_items').select('item, ref, created_at')
+      .eq('app_key', 'numerology-tarot').in('item', ['result', 'compatibility'])
+      .order('created_at', { ascending: false }).limit(200),
+    sb.from('profiles').select('id, name, relation').eq('app_key', 'numerology-tarot'),
+  ]);
+
+  document.getElementById('loadingView').style.display = 'none';
+  document.getElementById('mainView').style.display = 'block';
+  const list = document.getElementById('list');
+
+  if (unl.error || prof.error) {
+    console.error(unl.error || prof.error);
+    list.innerHTML = '<p class="muted small center">기록을 불러오지 못했어요.</p>';
+    return;
+  }
+
+  const byId = new Map((prof.data || []).map((p) => [String(p.id), p]));
+  const seen = new Set();
+  const rows = [];
+  for (const u of unl.data || []) {
+    if (u.item === 'result') {
+      // ref = "<profileId>:<ext>-<int>": the same profile shows once (newest numbers win)
+      const pid = String(u.ref).split(':')[0];
+      if (seen.has('r' + pid)) continue;
+      seen.add('r' + pid);
+      const p = byId.get(pid);
+      rows.push({ kind: '성향 해설', icon: '✨', title: p ? p.name : '삭제된 프로필', sub: p ? p.relation : '', href: p ? `/result.html?id=${encodeURIComponent(pid)}` : null, at: u.created_at });
+    } else {
+      // ref = "<idA>-<idB>:<extA>-<extB>:<int>"
+      const [a, b] = String(u.ref).split(':')[0].split('-');
+      const key = 'c' + a + '-' + b;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const pa = byId.get(a), pb = byId.get(b);
+      const ok = pa && pb;
+      rows.push({ kind: '궁합', icon: '💞', title: ok ? `${pa.name} & ${pb.name}` : '삭제된 프로필', sub: ok ? `${pa.relation} · ${pb.relation}` : '', href: ok ? `/compatibility.html?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}` : null, at: u.created_at });
+    }
+  }
+
+  if (!rows.length) {
+    list.innerHTML = `<div class="empty-state center" style="padding:40px 0;">
+      <div class="ic" style="font-size:30px;">📖</div>
+      <p class="muted small mt-8">아직 열어본 해설이 없어요.<br/>프로필의 해설이나 궁합을 코인으로 열면 여기에 저장돼요.</p>
+      <a href="/index.html" class="btn btn-primary mt-16">홈으로</a></div>`;
+    return;
+  }
+
+  list.innerHTML = rows.map((r) => {
+    const inner = `
+      <div class="avatar">${r.icon}</div>
+      <div class="info">
+        <div class="name">${esc(r.title)}</div>
+        <div class="rel"><span class="kind">${r.kind}</span><span>${esc(r.sub)}</span><span>${fmt(r.at)}</span></div>
+      </div>`;
+    return r.href
+      ? `<div class="profile-card h-item"><a class="profile-card-main" href="${r.href}">${inner}</a></div>`
+      : `<div class="profile-card h-item gone"><div class="profile-card-main">${inner}</div></div>`;
+  }).join('');
+  document.getElementById('note').textContent = '열어본 해설과 궁합은 언제든 무료로 다시 볼 수 있어요.';
+}
+init();
+</script>
+</body>
+</html>
